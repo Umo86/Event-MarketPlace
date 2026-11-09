@@ -43,7 +43,7 @@ export function EnrollForm() {
             </Button>
           )}
         </CopyButton>
-        <Button size="md" onClick={() => router.replace('/admin')}>
+        <Button size="md" onClick={() => router.replace('/start')}>
           I’ve saved my codes
         </Button>
       </Stack>

@@ -49,7 +49,7 @@ export async function runAction<S extends z.ZodType, T>(opts: {
       if (!actor) return { ok: false, error: 'Your sign-in has ended. Sign in again to carry on.' };
     } else {
       const auth = await getCurrentAuth();
-      if (!auth || auth.needsSecondFactor || auth.needsTwoFactorSetup) return { ok: false, error: 'Your sign-in has ended. Sign in again to carry on.' };
+      if (!auth || auth.needsSecondFactor || auth.needsTwoFactorSetup || auth.needsPasswordChange) return { ok: false, error: 'Your sign-in has ended. Sign in again to carry on.' };
       actor = auth.actor;
     }
     const grant = await authorize(actor, opts.action, target, { write: true });

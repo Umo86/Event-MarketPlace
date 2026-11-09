@@ -28,7 +28,7 @@ Show) and runs many shows at once.
 | Phase | What | Status |
 | --- | --- | --- |
 | 0 | Foundation: sign-in, audit log, job queue, shows and branding, exhibitor lists, exhibitor sign-in | Done |
-| 1 | Supplier accounts and Stripe Connect | Not started |
+| 1 | Supplier accounts and Stripe Connect | In progress: adding suppliers and their logins is done; Stripe Connect, show and category assignment, and documents are next |
 | 2 | Catalogue, checkout and charges | Not started |
 | 3 | Supplier panel | Not started |
 | 4 | Admin oversight | Not started |

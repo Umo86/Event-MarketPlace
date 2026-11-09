@@ -49,6 +49,8 @@ export type CurrentAuth = {
   isStaff: boolean;
   needsTwoFactorSetup: boolean;
   needsSecondFactor: boolean;
+  /** Someone else chose their password (a new supplier login): they choose their own before anything else. */
+  needsPasswordChange: boolean;
 };
 
 /** The signed-in account for this request (worked out once per request). */
@@ -71,7 +73,7 @@ export const getCurrentAuth = cache(async (): Promise<CurrentAuth | null> => {
     ip: ctx.ip,
     userAgent: ctx.userAgent,
   };
-  return { session, user, actor, isStaff, ...steps };
+  return { session, user, actor, isStaff, ...steps, needsPasswordChange: user.mustChangePassword };
 });
 
 /** Whether two-factor was turned on in the last few minutes (while the person saves their recovery codes). */
@@ -87,7 +89,7 @@ export async function renewSession(auth: CurrentAuth, opts: { twoFactorVerified:
 }
 
 /** Only paths on this site, so the sign-in page cannot be used to send people elsewhere. */
-export function safeNextPath(next: string | null | undefined, fallback = '/admin'): string {
+export function safeNextPath(next: string | null | undefined, fallback = '/start'): string {
   const path = localPath(next);
   if (!path || path === '/' || path.startsWith('/?') || path.startsWith('/#')) return fallback;
   return path;
@@ -102,8 +104,9 @@ export async function requireSignedIn(opts: { allowIncompleteTwoFactor?: boolean
   const auth = await getCurrentAuth();
   if (!auth) redirect(`/sign-in?next=${encodeURIComponent(await currentPath())}`);
   if (!opts.allowIncompleteTwoFactor) {
-    if (auth.needsTwoFactorSetup) redirect('/two-factor-setup');
     if (auth.needsSecondFactor) redirect(`/two-factor?next=${encodeURIComponent(await currentPath())}`);
+    if (auth.needsPasswordChange) redirect(`/choose-password?next=${encodeURIComponent(await currentPath())}`);
+    if (auth.needsTwoFactorSetup) redirect('/two-factor-setup');
   }
   return auth.actor;
 }
@@ -111,7 +114,7 @@ export async function requireSignedIn(opts: { allowIncompleteTwoFactor?: boolean
 /** For route handlers: null instead of a redirect. */
 export async function getUserActorForApi(): Promise<UserActor | null> {
   const auth = await getCurrentAuth();
-  if (!auth || auth.needsTwoFactorSetup || auth.needsSecondFactor) return null;
+  if (!auth || auth.needsTwoFactorSetup || auth.needsSecondFactor || auth.needsPasswordChange) return null;
   return auth.actor;
 }
 

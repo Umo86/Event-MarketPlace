@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { runPublicAction, type ActionResult } from '@/server/actions';
-import { beginTotpEnrollment, confirmTotpEnrollment, requestSignInCode, signInWithPassword, verifySecondFactor, verifySignInCode } from '@/server/auth/login';
+import { beginTotpEnrollment, confirmTotpEnrollment, requestSignInCode, setPassword, signInWithPassword, verifySecondFactor, verifySignInCode } from '@/server/auth/login';
 import { createSession, revokeSession } from '@/server/auth/sessions';
 import { getCurrentAuth, renewSession, requestContext, safeNextPath, setSessionCookie, signOutCurrentSession } from '@/server/auth/current';
 import { acceptInvitation, sendInvitationCode } from '@/server/auth/invitations';
@@ -125,7 +125,20 @@ export async function acceptInviteAction(input: { token: string; name: string; c
       const user = await acceptInvitation(d.token, { name: d.name, code: d.code ?? undefined, password: d.password ?? undefined }, await requestContext(), { signedInEmail });
       // Any earlier session in this browser belongs to someone else; start fresh.
       await signOutCurrentSession();
-      await startSessionAndGo(user.id, '/admin');
+      await startSessionAndGo(user.id, '/start');
+    },
+  });
+}
+
+export async function choosePasswordAction(input: { password: string; next?: string | null }): Promise<ActionResult> {
+  return runPublicAction({
+    schema: z.object({ password: z.string().min(1, 'Enter a password.').max(200), next }),
+    input,
+    work: async (d) => {
+      const auth = await getCurrentAuth();
+      if (!auth) redirect('/sign-in');
+      await setPassword(auth.actor, d.password, auth.session);
+      redirect(safeNextPath(d.next));
     },
   });
 }

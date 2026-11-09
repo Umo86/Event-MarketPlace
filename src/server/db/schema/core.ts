@@ -43,6 +43,8 @@ export const users = pgTable(
     failedPasswordAttempts: integer('failed_password_attempts').notNull().default(0),
     lockedUntil: timestamp('locked_until', tz),
     lastLoginAt: timestamp('last_login_at', tz),
+    /** Set when someone else chose the password (a supplier's first login): it must be changed at the next sign-in. */
+    mustChangePassword: boolean('must_change_password').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

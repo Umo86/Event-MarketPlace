@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { getDb, type DbLike } from '../db/client';
-import { SHOW_PERMISSIONS, showStaff, shows, type ShowPermission, type ShowRole } from '../db/schema';
+import { SHOW_PERMISSIONS, showStaff, shows, supplierUsers, type ShowPermission, type ShowRole, type SupplierRole } from '../db/schema';
 import { forbidden, notFound, readOnly } from '../errors';
 import type { Actor, ExhibitorActor, UserActor } from '../auth/actor';
 
@@ -26,6 +26,8 @@ type Rule =
   | { scope: 'show'; role: 'show_admin' }
   | { scope: 'show'; role: 'any' }
   | { scope: 'show'; permission: ShowPermission }
+  /** People who sign in for a supplier: `owner` for the owner only. */
+  | { scope: 'supplier'; role: 'any' | 'owner' }
   /** Exhibitors signed in to that show's storefront. */
   | { scope: 'storefront' };
 
@@ -35,6 +37,9 @@ export const ACTIONS = {
   'platform.audit.view': { scope: 'platform' },
   'platform.admins.manage': { scope: 'platform' },
   'shows.create': { scope: 'platform' },
+  /** Suppliers work across shows, so adding them and their logins is for super admins. */
+  'suppliers.view': { scope: 'platform' },
+  'suppliers.manage': { scope: 'platform' },
   /** The list of shows someone can open: everyone with an account sees their own. */
   'shows.list': { scope: 'self' },
 
@@ -54,6 +59,10 @@ export const ACTIONS = {
   'orders.refund': { scope: 'show', permission: 'refunds' },
   'reports.view': { scope: 'show', permission: 'reports' },
 
+  // A supplier's own panel
+  'supplier.view': { scope: 'supplier', role: 'any' },
+  'supplier.manage': { scope: 'supplier', role: 'owner' },
+
   // The storefront
   'storefront.browse': { scope: 'storefront' },
   'storefront.order': { scope: 'storefront' },
@@ -61,7 +70,7 @@ export const ACTIONS = {
 
 export type ActionName = keyof typeof ACTIONS;
 
-export type Target = { showId?: string };
+export type Target = { showId?: string; supplierId?: string };
 
 export type ShowAccess = { role: 'super_admin' | ShowRole; permissions: ReadonlySet<ShowPermission> };
 
@@ -97,7 +106,7 @@ export function allowedInShow(rule: Rule & { scope: 'show' }, access: ShowAccess
   return access.permissions.has(rule.permission);
 }
 
-export type Grant = { actor: Actor; access: ShowAccess | null };
+export type Grant = { actor: Actor; access: ShowAccess | null; supplierRole?: SupplierRole };
 
 /**
  * Throws unless the actor may do the action (for the show in `target`, where the action needs one).
@@ -117,6 +126,19 @@ export async function authorize(actor: Actor | null, action: ActionName, target:
     case 'self':
       if (actor.kind !== 'user') throw forbidden();
       return { actor, access: null };
+    case 'supplier': {
+      if (!target.supplierId) throw new Error(`${action} needs a supplier`);
+      if (actor.kind !== 'user' || actor.readOnly) throw notFound();
+      const d = opts.db ?? (await getDb());
+      const [member] = await d
+        .select({ role: supplierUsers.role })
+        .from(supplierUsers)
+        .where(and(eq(supplierUsers.supplierId, target.supplierId), eq(supplierUsers.userId, actor.userId)))
+        .limit(1);
+      if (!member) throw notFound();
+      if (rule.role === 'owner' && member.role !== 'owner') throw forbidden();
+      return { actor, access: null, supplierRole: member.role };
+    }
     case 'storefront': {
       // Only someone signed in to this show's own storefront.
       if (actor.kind !== 'exhibitor' || !target.showId || actor.showId !== target.showId) throw notFound();
@@ -154,6 +176,14 @@ export function asUser(actor: Actor): UserActor {
 export function asExhibitor(actor: Actor): ExhibitorActor {
   if (actor.kind !== 'exhibitor') throw forbidden();
   return actor;
+}
+
+/** Suppliers someone signs in for. */
+export async function supplierIdsFor(actor: Actor, db?: DbLike): Promise<string[]> {
+  if (actor.kind !== 'user') return [];
+  const d = db ?? (await getDb());
+  const rows = await d.select({ id: supplierUsers.supplierId }).from(supplierUsers).where(eq(supplierUsers.userId, actor.userId));
+  return rows.map((r) => r.id);
 }
 
 /** Which kind of sign-in an action needs: an account, or a storefront sign-in. */

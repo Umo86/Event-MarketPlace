@@ -216,9 +216,13 @@ export async function setPassword(actor: UserActor, newPassword: string, current
   const problem = passwordProblems(newPassword, actor.email);
   if (problem) throw invalid(problem, { password: problem });
   const db = await getDb();
+  const [current] = await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, actor.userId)).limit(1);
+  if (current?.passwordHash && (await verifyPassword(current.passwordHash, newPassword))) {
+    throw invalid('Choose a new password, not the one you have now.', { password: 'Choose a different password.' });
+  }
   const hash = await hashPassword(newPassword);
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ passwordHash: hash, failedPasswordAttempts: 0, lockedUntil: null }).where(eq(users.id, actor.userId));
+    await tx.update(users).set({ passwordHash: hash, mustChangePassword: false, failedPasswordAttempts: 0, lockedUntil: null }).where(eq(users.id, actor.userId));
     await writeAudit(tx, actor, { action: 'auth.password_set', summary: 'Set a new password', entityType: 'user', entityId: actor.userId });
   });
   // Changing a password signs out every other device.

@@ -77,6 +77,34 @@ use, because here it opens a shop rather than a chat.
 list each time, checked with zod, at most 5,000 rows and 4 MB, rate limited
 per network before the key is checked and per show after.
 
+## Suppliers
+
+**Super admins add suppliers and make their logins by hand; nothing is
+emailed** (Umit, 9 November 2026). Adding a supplier makes the company
+and an owner login for its main contact, with a one-off password shown
+once on screen (four groups of four, no look-alike characters) and a
+ready-to-send message to copy. Umit passes it on himself. Only the
+password's hash is kept, never the password.
+
+**A one-off password must be changed at the first sign-in.** The account
+is marked "must change password": until the supplier chooses their own,
+every page sends them to do it, and no action runs. The new password must
+differ from the one-off. A lost password gets a new one-off password from
+the supplier's page, which also signs them out everywhere. Super admins'
+own passwords are never reset from there.
+
+**If the email already has an account**, it's linked to the supplier and
+keeps its own password; no one-off password is made.
+
+**A supplier's status is worked out, not stored**: Paused if paused; Ready
+to sell once Stripe says it can take payments; Invited until someone from
+the supplier has signed in; otherwise Stripe pending. That way it can never
+drift from the facts. Pausing needs a reason, which the supplier sees.
+
+**Suppliers belong to the platform, not a show**, because one supplier
+serves many shows. Only super admins add them. Show admins assign them to
+their shows' categories (next part of the build).
+
 ## Branding
 
 **Built from stored values only.** A show admin picks a main colour, an

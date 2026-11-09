@@ -4,31 +4,37 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AppShell, Avatar, Burger, Group, Menu, NavLink, Stack, Text, UnstyledButton } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconBuildingStore, IconChevronDown, IconHistory, IconLogout, IconSettings, IconUserCircle } from '@tabler/icons-react';
+import { IconBuildingStore, IconChevronDown, IconHistory, IconHome, IconLogout, IconSettings, IconTruckDelivery, IconUserCircle } from '@tabler/icons-react';
 import { Wordmark } from './auth-card';
 import { signOutAction } from '@/app/(auth)/actions';
 
-export type ShellUser = { name: string; email: string; isSuperAdmin: boolean };
+export type ShellUser = { name: string; email: string };
+
+/** Icons by name, so server layouts can pass plain data. */
+const ICONS = {
+  shows: IconBuildingStore,
+  suppliers: IconTruckDelivery,
+  settings: IconSettings,
+  audit: IconHistory,
+  account: IconUserCircle,
+  home: IconHome,
+};
+export type NavItem = { label: string; href: string; icon: keyof typeof ICONS; exact?: boolean; also?: string[] };
 
 function initials(name: string, email: string) {
   const parts = (name.trim() || email).split(/[\s@.]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
-/** The plain Event MarketPlace frame for Media10 staff. Show pages add the show's name and logo above their content. */
-export function AdminShell({ user, children }: { user: ShellUser; children: React.ReactNode }) {
+/**
+ * The plain Event MarketPlace frame, for Media10 staff and for suppliers. Show and supplier pages
+ * add their own name (and the show's logo) above their content.
+ */
+export function AdminShell({ user, nav, home = '/start', children }: { user: ShellUser; nav: NavItem[]; home?: string; children: React.ReactNode }) {
   const [opened, { toggle, close }] = useDisclosure();
   const pathname = usePathname();
-  const nav = [
-    { label: 'Shows', href: '/admin', icon: <IconBuildingStore size={18} />, active: pathname === '/admin' || pathname.startsWith('/admin/shows') },
-    ...(user.isSuperAdmin
-      ? [
-          { label: 'Platform settings', href: '/admin/platform', icon: <IconSettings size={18} />, active: pathname.startsWith('/admin/platform') },
-          { label: 'Audit log', href: '/admin/audit', icon: <IconHistory size={18} />, active: pathname.startsWith('/admin/audit') },
-        ]
-      : []),
-    { label: 'Your account', href: '/account', icon: <IconUserCircle size={18} />, active: pathname.startsWith('/account') },
-  ];
+  const under = (h: string) => pathname === h || pathname.startsWith(`${h}/`);
+  const isActive = (item: NavItem) => (item.exact ? pathname === item.href : under(item.href)) || (item.also ?? []).some(under);
   return (
     <AppShell header={{ height: 60 }} navbar={{ width: 240, breakpoint: 'sm', collapsed: { mobile: !opened } }} padding="lg" styles={{ main: { background: 'var(--em-canvas)' } }}>
       <a href="#content" className="skip-link">
@@ -38,7 +44,7 @@ export function AdminShell({ user, children }: { user: ShellUser; children: Reac
         <Group h="100%" px="md" justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" aria-label="Open navigation" />
-            <Link href="/admin" style={{ textDecoration: 'none' }} aria-label="Event MarketPlace: your shows">
+            <Link href={home} style={{ textDecoration: 'none' }} aria-label="Event MarketPlace home">
               <Wordmark />
             </Link>
           </Group>
@@ -74,9 +80,11 @@ export function AdminShell({ user, children }: { user: ShellUser; children: Reac
       </AppShell.Header>
       <AppShell.Navbar p="sm" style={{ borderColor: 'var(--em-line)' }}>
         <Stack gap={2} component="nav" aria-label="Main">
-          {nav.map((item) => (
-            <NavLink key={item.href} component={Link} href={item.href} label={item.label} leftSection={item.icon} active={item.active} onClick={close} aria-current={item.active ? 'page' : undefined} />
-          ))}
+          {nav.map((item) => {
+            const Icon = ICONS[item.icon];
+            const active = isActive(item);
+            return <NavLink key={item.href} component={Link} href={item.href} label={item.label} leftSection={<Icon size={18} />} active={active} onClick={close} aria-current={active ? 'page' : undefined} />;
+          })}
         </Stack>
       </AppShell.Navbar>
       <AppShell.Main id="content" tabIndex={-1}>

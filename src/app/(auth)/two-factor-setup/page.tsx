@@ -10,9 +10,9 @@ export const metadata: Metadata = { title: 'Set up two-factor sign-in' };
 export default async function TwoFactorSetupPage() {
   const auth = await getCurrentAuth();
   if (!auth) redirect('/sign-in');
-  if (!twoFactorOn()) redirect('/admin');
+  if (!twoFactorOn()) redirect('/start');
   // Just turned on: stay here so the person can save their recovery codes.
-  if (auth.user.totpEnabledAt && !twoFactorJustTurnedOn(auth.user)) redirect('/admin');
+  if (auth.user.totpEnabledAt && !twoFactorJustTurnedOn(auth.user)) redirect('/start');
   return (
     <AuthCard
       title="Set up two-factor sign-in"
