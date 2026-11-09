@@ -88,7 +88,7 @@ describe('resolving a storefront’s branding', () => {
 describe('the CSS built from branding', () => {
   it('contains only checked hex colours', () => {
     const css = brandCss('#0b5d57', '#f4d35e');
-    expect(css.startsWith(':root{')).toBe(true);
+    expect(css.startsWith(':root,:root[data-mantine-color-scheme]{')).toBe(true);
     expect(css).toContain('--mantine-primary-color-filled:#0b5d57');
     expect(css).not.toMatch(/[<>"'\\]/);
     expect(css.match(/[{}]/g)).toEqual(['{', '}']);

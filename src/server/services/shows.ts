@@ -146,7 +146,8 @@ export function orderingDateProblems(d: { orderingOpensAt: Date | null; earlyBir
   return problems;
 }
 
-export async function updateShowSettings(actor: UserActor, input: z.infer<typeof showSettingsSchema>) {
+export async function updateShowSettings(actor: UserActor, raw: z.input<typeof showSettingsSchema>) {
+  const input = showSettingsSchema.parse(raw);
   await authorize(actor, 'show.settings.edit', { showId: input.showId }, { write: true });
   const db = await getDb();
   const show = await getShow(input.showId, db);

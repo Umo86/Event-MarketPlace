@@ -27,7 +27,7 @@ Show) and runs many shows at once.
 
 | Phase | What | Status |
 | --- | --- | --- |
-| 0 | Foundation: sign-in, audit log, job queue, shows and branding, exhibitor lists, exhibitor sign-in | In progress |
+| 0 | Foundation: sign-in, audit log, job queue, shows and branding, exhibitor lists, exhibitor sign-in | Done |
 | 1 | Supplier accounts and Stripe Connect | Not started |
 | 2 | Catalogue, checkout and charges | Not started |
 | 3 | Supplier panel | Not started |
@@ -62,6 +62,9 @@ npm test                              # logic and database tests
 npm run build && npm run test:e2e     # browser tests against the production build
 ```
 
+Browser tests need Chromium. If Playwright can't find its own copy, point it
+at one: `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
+
 ## Where things are
 
 | Folder | What |
@@ -76,7 +79,7 @@ npm run build && npm run test:e2e     # browser tests against the production bui
 | `src/server/jobs` | The job queue |
 | `drizzle` | Database migrations |
 | `tests` | Unit, database and browser tests |
-| `docs` | Guides: deployment, the BluePrint connection, payments |
+| `docs` | Guides: [deployment](docs/deployment.md), [the BluePrint connection](docs/blueprint.md), [money rules](docs/payments.md) |
 
 Rules for working on the code are in `CLAUDE.md`; why it's built this way
 is in `DECISIONS.md`.

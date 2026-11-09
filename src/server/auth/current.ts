@@ -74,6 +74,11 @@ export const getCurrentAuth = cache(async (): Promise<CurrentAuth | null> => {
   return { session, user, actor, isStaff, ...steps };
 });
 
+/** Whether two-factor was turned on in the last few minutes (while the person saves their recovery codes). */
+export function twoFactorJustTurnedOn(user: { totpEnabledAt: Date | null }) {
+  return Boolean(user.totpEnabledAt && Date.now() - user.totpEnabledAt.getTime() < 10 * 60 * 1000);
+}
+
 /** Swaps this browser's session for a brand-new one (e.g. once two-factor is passed), so an earlier token is worthless. */
 export async function renewSession(auth: CurrentAuth, opts: { twoFactorVerified: boolean }) {
   const { token, expiresAt } = await createSession(auth.user.id, { ...(await requestContext()), twoFactorVerified: opts.twoFactorVerified, signedInAt: auth.session.createdAt });

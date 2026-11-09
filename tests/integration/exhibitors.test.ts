@@ -146,3 +146,27 @@ describe('the list sent by BluePrint', () => {
     expect(types.map((t) => t.key).sort()).toEqual(['shell_scheme', 'space_only']);
   });
 });
+
+describe('the BluePrint import address', () => {
+  it('answers each kind of request in words BluePrint’s developer can act on', async () => {
+    const { POST } = await import('@/app/api/public/shows/[slug]/exhibitors/route');
+    const show = await makeShow();
+    const admin = await addStaff(show.id, 'show_admin');
+    const key = await makeConnectionKey(admin, show.id);
+    const call = (body: unknown, headers: Record<string, string>) =>
+      POST(new Request(`http://localhost/api/public/shows/${show.slug}/exhibitors`, { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body) }), {
+        params: Promise.resolve({ slug: show.slug }),
+      } as never);
+    const json = { 'Content-Type': 'application/json' };
+    const list = { exhibitors: [{ company: 'Acme', stand: 'B12', contacts: [{ email: 'sam@acme.co.uk' }] }] };
+
+    expect((await call(list, json)).status).toBe(401);
+    expect((await call(list, { ...json, Authorization: 'Bearer em_aaaaaaaaaaaa_' + 'x'.repeat(43) })).status).toBe(401);
+    expect((await call(list, { 'Content-Type': 'text/plain', Authorization: `Bearer ${key}` })).status).toBe(415);
+    expect((await call('{not json', { ...json, Authorization: `Bearer ${key}` })).status).toBe(400);
+    expect((await call({ exhibitors: [] }, { ...json, Authorization: `Bearer ${key}` })).status).toBe(422);
+    const ok = await call(list, { ...json, Authorization: `Bearer ${key}` });
+    expect(ok.status).toBe(200);
+    expect(await ok.json()).toEqual({ contacts: 1, added: 1, updated: 0, removed: 0, skipped: 0 });
+  });
+});

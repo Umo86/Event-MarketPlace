@@ -1,0 +1,72 @@
+/*
+ * The plain Event MarketPlace look: warm paper, hairlines rather than shadows, one deep green for
+ * actions, and a serif wordmark. Storefronts swap the green for the show's own colour.
+ */
+:root {
+  --em-ink: #1c1b18;
+  --em-paper: #ffffff;
+  --em-canvas: #f6f5f1;
+  --em-line: #e1ded6;
+  --em-line-strong: #cfcbc1;
+  /* Secondary text: 6.5:1 on white, 6:1 on the canvas. */
+  --em-muted: #5f5c55;
+  --em-serif: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+  /* Storefront defaults; a show's branding overrides these (src/lib/branding.ts). */
+  --brand-main: #0b5d57;
+  --brand-main-hover: #094f4a;
+  --brand-on-main: #ffffff;
+  --brand-main-tint: #e7efee;
+  --brand-accent: #f4d35e;
+  --brand-on-accent: #1a1b1e;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--em-canvas);
+  color: var(--em-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Links in running text are underlined, so they don't rely on colour alone. */
+.prose a,
+a.text-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -200px;
+  z-index: 1000;
+  padding: 10px 14px;
+  background: var(--em-ink);
+  color: #fff;
+  border-radius: 4px;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+.wordmark {
+  font-family: var(--em-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-title {
+  font-family: var(--em-serif);
+  font-weight: 560;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mantine-primary-color-filled);
+  outline-offset: 2px;
+}

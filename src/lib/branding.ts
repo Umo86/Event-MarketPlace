@@ -226,12 +226,15 @@ export function brandCssVariables(primary: string, accent: string): Record<strin
   return vars;
 }
 
-/** The variables as a `:root { … }` rule. Every value is a checked hex colour, so nothing else can get in. */
+/**
+ * The variables as one CSS rule. Every value is a checked hex colour, so nothing else can get in.
+ * The second selector matches Mantine's own colour-scheme rule, so these win over its defaults.
+ */
 export function brandCss(primary: string, accent: string): string {
   const vars = brandCssVariables(primary, accent);
   const body = Object.entries(vars)
     .filter(([k, v]) => /^--[a-z0-9-]+$/.test(k) && isHex(v))
     .map(([k, v]) => `${k}:${v}`)
     .join(';');
-  return `:root{${body}}`;
+  return `:root,:root[data-mantine-color-scheme]{${body}}`;
 }

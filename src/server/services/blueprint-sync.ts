@@ -52,19 +52,19 @@ const exhibitorSchema = z.object({
 
 const bodySchema = z.object({ exhibitors: z.array(z.unknown()) });
 
-export type SyncRead = { ok: true; rows: ListRow[]; skipped: number } | { ok: false; error: string };
+export type SyncRead = { ok: true; rows: ListRow[]; skipped: number } | { ok: false; error: string; status: 400 | 413 | 422 };
 
 /** BluePrint's list, checked like a spreadsheet; or what's wrong with it, in words BluePrint's developer can act on. */
 export function readSyncBody(input: unknown): SyncRead {
   const top = bodySchema.safeParse(input);
-  if (!top.success) return { ok: false, error: 'Send JSON with an "exhibitors" list: { "exhibitors": [ … ] }.' };
+  if (!top.success) return { ok: false, status: 400, error: 'Send JSON with an "exhibitors" list: { "exhibitors": [ … ] }.' };
   const rows: ListRow[] = [];
   let skipped = 0;
   for (let i = 0; i < top.data.exhibitors.length; i++) {
     const parsed = exhibitorSchema.safeParse(top.data.exhibitors[i]);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { ok: false, error: `Check exhibitors.${[i, ...issue.path].join('.')}: ${issue.message}` };
+      return { ok: false, status: 400, error: `Check exhibitors.${[i, ...issue.path].join('.')}: ${issue.message}` };
     }
     const e = parsed.data;
     let usable = 0;
@@ -75,9 +75,9 @@ export function readSyncBody(input: unknown): SyncRead {
       rows.push({ company: e.company, stand: e.stand, hall: e.hall, standType: e.standType, name: c.name, email, phone: c.phone, externalId: e.id ?? null });
     }
     if (!usable) skipped++;
-    if (rows.length > MAX_ROWS) return { ok: false, error: `That's more than ${MAX_ROWS.toLocaleString('en-GB')} contacts. Send up to ${MAX_ROWS.toLocaleString('en-GB')} per show.` };
+    if (rows.length > MAX_ROWS) return { ok: false, status: 413, error: `That's more than ${MAX_ROWS.toLocaleString('en-GB')} contacts. Send up to ${MAX_ROWS.toLocaleString('en-GB')} per show.` };
   }
-  if (!rows.length) return { ok: false, error: 'No exhibitor has a usable email address. An empty list is treated as a mistake, so nothing changed.' };
+  if (!rows.length) return { ok: false, status: 422, error: 'No exhibitor has a usable email address. An empty list is treated as a mistake, so nothing changed.' };
   return { ok: true, rows, skipped };
 }
 

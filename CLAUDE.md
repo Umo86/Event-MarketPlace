@@ -48,6 +48,10 @@ English.
 - **Code layout:** server-only modules start with `import 'server-only'`.
   Files with `'use client'` export components only; shared constants and
   pure helpers live in `src/lib/`.
+- **Mantine in server components:** use the named parts (`ListItem`,
+  `TableTr`), never `List.Item` or `Table.Tr`, and `LinkButton` /
+  `LinkAnchor` (`src/components/ui/links.tsx`) instead of
+  `component={Link}`. Both break across the server–browser boundary.
 - **Copy:** plain British English, sentence case, short sentences, no
   jargon. Errors say what happened and what to do next.
 - **Data:** never create invented suppliers, exhibitors or orders in a live
