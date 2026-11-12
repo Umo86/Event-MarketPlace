@@ -82,7 +82,10 @@
 
 .headerLink:hover,
 .headerButton:hover {
-  background: rgba(255, 255, 255, 0.14);
+  /* Darker, never lighter: white text on the main colour only gets easier to read. */
+  background: rgba(0, 0, 0, 0.16);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .main {
