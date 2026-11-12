@@ -29,7 +29,7 @@ Show) and runs many shows at once.
 | --- | --- | --- |
 | 0 | Foundation: sign-in, audit log, job queue, shows and branding, exhibitor lists, exhibitor sign-in | Done |
 | 1 | Supplier accounts and Stripe Connect: logins, Connect with Stripe, categories per show, documents with expiry reminders | Done (test mode) |
-| 2 | Catalogue, checkout and charges | Not started |
+| 2 | Catalogue with price approval, basket, checkout with a charge per supplier, invoices, refunds and credit notes, order reports | Done (test mode) |
 | 3 | Supplier panel | Not started |
 | 4 | Admin oversight | Not started |
 | 5 | Pilot with real suppliers and live payments | Not started |
@@ -71,13 +71,14 @@ at one: `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | --- | --- |
 | `src/app/[show]` | A show's branded storefront for exhibitors |
 | `src/app/admin` | Super admins and show teams |
-| `src/app/supplier` | The supplier panel: overview, payments (Stripe), documents |
+| `src/app/supplier` | The supplier panel: overview, orders and refunds, catalogue, payments (Stripe), documents |
 | `src/app/api` | The BluePrint import, webhooks, scheduled jobs |
 | `src/server/services` | Business rules; each checks who is asking |
 | `src/server/authz` | The one place that decides who may do what |
 | `src/server/auth`, `src/server/security` | Sign-in and security helpers |
 | `src/server/jobs` | The job queue |
 | `src/server/payments` | Stripe, the payment simulator and the webhooks |
+| `src/server/pdf` | Invoice and credit note PDFs |
 | `drizzle` | Database migrations |
 | `tests` | Unit, database and browser tests |
 | `docs` | Guides: [deployment](docs/deployment.md), [the BluePrint connection](docs/blueprint.md), [money rules](docs/payments.md) |

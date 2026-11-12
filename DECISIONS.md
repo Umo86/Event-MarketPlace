@@ -197,9 +197,36 @@ is embedded Postgres (PGlite) in `.data/`, files go to `.data/files`, email
 goes to a local mailbox at `/dev/mailbox`, and a payment simulator stands
 in for Stripe. None of these stand-ins can run on a live web address.
 
-## Money (for phase 2, recorded now)
+## Money
 
 **Commission's VAT treatment is a setting, not code.** Commission is worked
 out on the net (pre-VAT) amount. Whether Media10 charges VAT on it, and
 how, is for Umit's accountant to confirm. It is a platform setting, off
 until they decide.
+
+**Price approval holds the change, not the product** (12 November 2026).
+A new product waits as "pending". A change to a live product's name,
+description, picture, prices or VAT is kept beside it while exhibitors go
+on seeing (and buying) the approved version; approving swaps it in,
+turning it down drops it with a reason the supplier sees. Stock limits,
+stand types, codes and taking something off sale apply at once, because
+they never put a price up. Media10's own services need no approval.
+
+**The basket is what's still wanted.** Placing an order doesn't empty it;
+paying does, part by part. So if one supplier's charge fails, that
+supplier's items are still in the basket, and placing a fresh order
+cancels the old unpaid part instead of making a duplicate.
+
+**Stock is held for an hour, and the part is cancelled after a day.** An
+unpaid order stops holding stock once its hour is up (so nobody is blocked
+by an abandoned checkout), but the exhibitor can still press Pay for a
+day: we check the stock again and hold it for another hour if it's there.
+
+**Commission is copied onto each line when the order is placed,** worked
+out from product → category → supplier → show → platform default. Later
+changes never touch placed orders, and a supplier order's application fee
+is the sum of its lines.
+
+**One email per payment, not per supplier.** The exhibitor gets one
+confirmation listing each supplier's part, with each supplier's invoice
+attached, even though their card statement shows a payment per supplier.

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { ready, storefrontSignIn } from './helpers';
+import { PASSWORD, ready, storefrontSignIn } from './helpers';
 
 async function axe(page: import('@playwright/test').Page) {
   const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
@@ -55,4 +55,35 @@ test('an exhibitor orders from two sellers, one card is declined by one, then pa
   const stranger = await page.context().browser()!.newContext();
   expect((await stranger.request.get(new URL(href!, page.url()).toString())).status()).toBe(404);
   await stranger.close();
+  const orderUrl = page.url();
+
+  // The supplier refunds £10 from their own panel.
+  const supplierContext = await page.context().browser()!.newContext();
+  const supplier = await supplierContext.newPage();
+  await supplier.goto('/sign-in');
+  await ready(supplier);
+  await supplier.getByLabel('Email').fill('carpets@supplier.test');
+  await supplier.locator('input[autocomplete="current-password"]').fill(PASSWORD);
+  await supplier.getByRole('button', { name: 'Sign in' }).click();
+  await supplier.waitForURL(/\/supplier\/[0-9a-f-]{36}$/);
+  await supplier.getByRole('link', { name: 'Orders', exact: true }).click();
+  await ready(supplier);
+  await supplier.getByTestId('orders-table').getByRole('row').filter({ hasText: 'Brick & Co (demo)' }).first().getByRole('link').click();
+  await ready(supplier);
+  await axe(supplier);
+  await supplier.getByRole('button', { name: 'Refund…' }).click();
+  await supplier.getByText('An amount', { exact: true }).click();
+  await supplier.getByLabel(/^Amount/).fill('10');
+  await supplier.getByLabel('Reason').fill('One tile short');
+  await supplier.getByRole('button', { name: 'Refund £10.00' }).click();
+  await expect(supplier.getByText('Refunded. The exhibitor has been emailed a credit note.')).toBeVisible();
+  await expect(supplier.getByText(/£10\.00 · done/)).toBeVisible();
+  await supplierContext.close();
+
+  // The exhibitor sees it, with a credit note.
+  await page.goto(orderUrl);
+  await expect(async () => {
+    await page.reload();
+    await expect(page.getByRole('link', { name: /credit note DCC-CRN-\d{6}/ })).toBeVisible();
+  }).toPass({ timeout: 15_000 });
 });

@@ -8,6 +8,8 @@ import { createOrganiserSupplier } from '@/server/services/suppliers';
 import { basketFor, chargeOrder, myOrder, placeOrder, releaseExpiredHolds, setBasketQuantity, simulatePayment } from '@/server/services/orders';
 import { reconcileRefunds, refundSupplierOrder, refundsForOrder } from '@/server/services/refunds';
 import { invoiceFileFor } from '@/server/services/invoices';
+import { showOrderRows, summarise, supplierOrderRows } from '@/server/services/reports';
+import { ordersCsv } from '@/server/services/exports';
 import { setCommission } from '@/server/services/catalogue';
 import { setPaymentsForTests, SimulatedPayments, type PaymentsProvider } from '@/server/payments/provider';
 import { setStorageForTests, MemoryStorage } from '@/server/storage';
@@ -248,5 +250,42 @@ describe('refunds and credit notes', () => {
     const db = await getDb();
     const rows = await db.select().from(refunds).where(eq(refunds.supplierOrderId, part.id));
     expect(rows).toMatchObject([{ source: 'stripe', amountPence: 1350, status: 'succeeded', creditNoteNumber: expect.stringMatching(/-CRN-/) }]);
+  });
+});
+
+describe('the reports match the invoices and credit notes', () => {
+  it('a test order across three suppliers, paid and part-refunded, adds up everywhere', async () => {
+    const s = await shop();
+    await fill(s);
+    const order = await placeOrder(s.sam, s.show.id, { standId: s.b12.id });
+    await simulatePayment(s.sam, s.show.id, order.id);
+    const db = await getDb();
+    const parts = await db.select().from(supplierOrders).where(eq(supplierOrders.orderId, order.id));
+    const carpet = parts.find((p) => p.supplierId === s.carpets.supplier.id)!;
+    await refundSupplierOrder(s.carpets.owner, { supplierOrderId: carpet.id, amountPence: 2700, reason: 'Two m² not laid' }, 'supplier');
+
+    const rows = await showOrderRows(s.showAdmin, s.show.id);
+    const { total, suppliers: bySupplier } = summarise(rows);
+    // Invoices: £108 + £135 + £36 = £279. Credit note: £27.
+    const invoiced = parts.reduce((a, p) => a + p.totalPence, 0);
+    const credited = (await refundsForOrder(order.id)).filter((r) => r.status === 'succeeded').reduce((a, r) => a + r.amountPence, 0);
+    expect(total).toMatchObject({ orders: 3, paidPence: invoiced, refundedPence: credited });
+    expect(invoiced).toBe(27900);
+    expect(credited).toBe(2700);
+    // Commission: £2.50 + £11.25, less £2.25 returned with the refund.
+    expect(total.commissionPence).toBe(250 + 1125 - 225);
+    const carpets = bySupplier.find((x) => x.supplierId === s.carpets.supplier.id)!;
+    expect(carpets.supplierKeepsPence).toBe(13500 - 2700 - 900);
+    // The supplier's own report says the same about them.
+    const own = summarise(await supplierOrderRows(s.carpets.owner, s.carpets.supplier.id));
+    expect(own.suppliers).toEqual([carpets]);
+    // And the export has every line, with its invoice number.
+    const csv = await ordersCsv(rows, { withCommission: true });
+    expect(csv).toContain(order.number);
+    for (const p of parts) expect(csv).toContain(p.invoiceNumber!);
+    expect(csv.split('\r\n').filter(Boolean)).toHaveLength(4);
+    // Show staff without the orders right can't see any of it.
+    const team = await addStaff(s.show.id, 'show_team', []);
+    await expect(showOrderRows(team, s.show.id)).rejects.toMatchObject({ code: 'forbidden' });
   });
 });

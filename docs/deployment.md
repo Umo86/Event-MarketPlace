@@ -82,8 +82,8 @@ your email with the code you're sent, then set up two-factor sign-in.
 
 | Endpoint | Listen to | Events | Secret goes in |
 | --- | --- | --- | --- |
-| `https://<your address>/api/webhooks/stripe/connect` | Events on **connected accounts** | `account.updated` now; from phase 2 also `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `refund.updated`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`, `application_fee.refunded` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
-| `https://<your address>/api/webhooks/stripe/platform` | Events on **your account** | From phase 2: `setup_intent.succeeded`, `setup_intent.setup_failed`, `payment_intent.succeeded`, `payment_intent.payment_failed` | `STRIPE_WEBHOOK_SECRET` |
+| `https://<your address>/api/webhooks/stripe/connect` | Events on **connected accounts** | `account.updated`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `refund.created`, `refund.updated`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
+| `https://<your address>/api/webhooks/stripe/platform` | Events on **your account** | `setup_intent.succeeded`, `setup_intent.setup_failed`, `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `refund.updated`, `application_fee.refunded` (Media10's fees are on its own account) | `STRIPE_WEBHOOK_SECRET` |
 
 4. Redeploy. On a supplier's Payments page, "Connect with Stripe" now goes
    to Stripe's own set-up pages. In test mode Stripe lets you use its test
@@ -102,7 +102,8 @@ pending, open them under Suppliers and press "Check with Stripe".
 ## 8. Daily jobs
 
 Vercel Cron calls `/api/cron/jobs` every 10 minutes (set in `vercel.json`).
-Besides sending queued emails, once a day it removes expired sign-in data
+Besides sending queued emails and cancelling unpaid order parts left for
+a day, once a day it removes expired sign-in data
 and, from 8am, sends reminders about supplier documents that expire within
 30 days. Reminder emails only go once Resend is set up.
 

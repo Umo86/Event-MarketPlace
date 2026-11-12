@@ -63,3 +63,13 @@ describe('what Stripe says about an account', () => {
     expect(supplierStatus({ kind: 'organiser', pausedAt: new Date(), stripeChargesEnabled: false, anyoneSignedIn: false })).toBe('paused');
   });
 });
+
+describe('CSV exports', () => {
+  it('quote what needs quoting and never let a cell run as a formula', async () => {
+    const { toCsv } = await import('@/lib/csv');
+    const csv = toCsv(['Company', 'Note'], [['=HYPERLINK("x")', 'a, b'], ['Acme', '-1']]);
+    expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
+    expect(csv).toContain('"a, b"');
+    expect(csv).toContain("'-1");
+  });
+});

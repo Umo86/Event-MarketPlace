@@ -11,12 +11,13 @@ export default async function ShowLayout({ children, params }: LayoutProps<'/adm
   const { showId } = await params;
   const { actor, show, branding } = await loadShow(showId);
   const base = `/admin/shows/${show.id}`;
-  const [admin, exhibitors] = await Promise.all([can(actor, 'show.branding.edit', { showId }), can(actor, 'exhibitors.view', { showId })]);
+  const [admin, exhibitors, ordersRight] = await Promise.all([can(actor, 'show.branding.edit', { showId }), can(actor, 'exhibitors.view', { showId }), can(actor, 'orders.view', { showId })]);
   const tabs = [
     { label: 'Overview', href: base, exact: true },
     ...(exhibitors ? [{ label: 'Exhibitors', href: `${base}/exhibitors` }] : []),
     { label: 'Categories', href: `${base}/categories` },
     { label: 'Products', href: `${base}/products` },
+    ...(ordersRight ? [{ label: 'Orders', href: `${base}/orders` }] : []),
     ...(admin ? [{ label: 'Branding', href: `${base}/branding` }] : []),
     { label: 'Team', href: `${base}/team` },
     ...(admin ? [{ label: 'Settings', href: `${base}/settings` }] : []),
