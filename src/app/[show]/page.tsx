@@ -4,6 +4,7 @@ import { requireActor } from '@/server/auth/current';
 import { asExhibitor } from '@/server/authz';
 import { myStands } from '@/server/services/storefront-auth';
 import { fileUrl } from '@/server/services/files';
+import { storefrontCategories } from '@/server/services/categories';
 import { canOrder, orderingState, type OrderingState } from '@/lib/ordering';
 import { dateTime } from '@/lib/format';
 import { loadStorefront } from './load';
@@ -34,7 +35,7 @@ export default async function StorefrontHome({ params }: PageProps<'/[show]'>) {
   const { show: slug } = await params;
   const { show, branding } = await loadStorefront(slug);
   const { actor } = await requireActor('storefront.browse', { showId: show.id });
-  const stands = await myStands(asExhibitor(actor));
+  const [stands, categories] = await Promise.all([myStands(asExhibitor(actor)), storefrontCategories(actor, show.id)]);
   const state = orderingState(show);
   const tz = show.timezone;
   const banner = fileUrl(branding.bannerFileId);
@@ -115,9 +116,32 @@ export default async function StorefrontHome({ params }: PageProps<'/[show]'>) {
         </Card>
       </SimpleGrid>
       <Card title="Services">
-        <Text fz="sm" c="dimmed">
-          Services for your stand will appear here once the show’s suppliers have added them: furniture, carpet, electrics, nameboards, cleaning and more.
-        </Text>
+        {categories.length ? (
+          <Stack gap="sm">
+            <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} data-testid="storefront-categories">
+              {categories.map((c) => (
+                <Paper key={c.id} withBorder radius="md" p="md" style={{ borderColor: 'var(--em-line)' }}>
+                  <Text fw={650}>{c.name}</Text>
+                  {c.description ? (
+                    <Text fz="sm" c="dimmed" mt={2}>
+                      {c.description}
+                    </Text>
+                  ) : null}
+                  <Text fz="xs" c="dimmed" mt={6}>
+                    Supplied by {c.supplierName}
+                  </Text>
+                </Paper>
+              ))}
+            </SimpleGrid>
+            <Text fz="sm" c="dimmed">
+              Products and prices are on their way. You’ll be able to order them here soon.
+            </Text>
+          </Stack>
+        ) : (
+          <Text fz="sm" c="dimmed">
+            Services for your stand will appear here once the show’s suppliers have added them: furniture, carpet, electrics, nameboards, cleaning and more.
+          </Text>
+        )}
       </Card>
       <Card title="Need help?">
         <Stack gap={4}>

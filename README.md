@@ -28,7 +28,7 @@ Show) and runs many shows at once.
 | Phase | What | Status |
 | --- | --- | --- |
 | 0 | Foundation: sign-in, audit log, job queue, shows and branding, exhibitor lists, exhibitor sign-in | Done |
-| 1 | Supplier accounts and Stripe Connect | In progress: adding suppliers and their logins is done; Stripe Connect, show and category assignment, and documents are next |
+| 1 | Supplier accounts and Stripe Connect: logins, Connect with Stripe, categories per show, documents with expiry reminders | Done (test mode) |
 | 2 | Catalogue, checkout and charges | Not started |
 | 3 | Supplier panel | Not started |
 | 4 | Admin oversight | Not started |
@@ -43,15 +43,15 @@ You need Node.js 22 or later.
 
 ```bash
 npm install
-npm run seed     # a demo show, exhibitors and staff (local database only)
+npm run seed     # a demo show, exhibitors, staff and suppliers (local database only)
 npm run dev
 ```
 
 Open http://localhost:3000. Nothing needs an account or key: the database
 is embedded in `.data/`, files go to `.data/files`, and emails (including
 sign-in codes) appear in the local mailbox at
-http://localhost:3000/dev/mailbox. The seed prints the accounts to sign in
-with.
+http://localhost:3000/dev/mailbox, and a payment simulator stands in for
+Stripe. The seed prints the accounts to sign in with.
 
 ## Checks
 
@@ -71,12 +71,13 @@ at one: `PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`.
 | --- | --- |
 | `src/app/[show]` | A show's branded storefront for exhibitors |
 | `src/app/admin` | Super admins and show teams |
-| `src/app/supplier` | The supplier panel (from phase 1) |
+| `src/app/supplier` | The supplier panel: overview, payments (Stripe), documents |
 | `src/app/api` | The BluePrint import, webhooks, scheduled jobs |
 | `src/server/services` | Business rules; each checks who is asking |
 | `src/server/authz` | The one place that decides who may do what |
 | `src/server/auth`, `src/server/security` | Sign-in and security helpers |
 | `src/server/jobs` | The job queue |
+| `src/server/payments` | Stripe, the payment simulator and the webhooks |
 | `drizzle` | Database migrations |
 | `tests` | Unit, database and browser tests |
 | `docs` | Guides: [deployment](docs/deployment.md), [the BluePrint connection](docs/blueprint.md), [money rules](docs/payments.md) |

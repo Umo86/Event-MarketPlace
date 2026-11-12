@@ -21,9 +21,9 @@ export type SupplierValues = {
 export const EMPTY_SUPPLIER: SupplierValues = { name: '', contactName: '', email: '', phone: '', addressLine1: '', addressLine2: '', city: '', postcode: '', vatRegistered: true, vatNumber: '', invoicePrefix: '' };
 
 /** The supplier's company details. On a new supplier, the email becomes their login. */
-export function SupplierForm({ initial, mode, onSubmit, pending, errors }: { initial: SupplierValues; mode: 'create' | 'edit'; onSubmit: (v: SupplierValues) => void; pending: boolean; errors: Record<string, string> }) {
+export function SupplierForm({ initial, mode, onSubmit, pending, errors }: { initial: SupplierValues; mode: 'create' | 'edit' | 'organiser'; onSubmit: (v: SupplierValues) => void; pending: boolean; errors: Record<string, string> }) {
   const [v, setV] = useState(initial);
-  const [prefixTouched, setPrefixTouched] = useState(mode === 'edit');
+  const [prefixTouched, setPrefixTouched] = useState(mode !== 'create');
   const set = (k: keyof SupplierValues) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.currentTarget.value;
     setV((old) => ({ ...old, [k]: value, ...(k === 'name' && !prefixTouched ? { invoicePrefix: suggestPrefix(value) } : {}) }));
@@ -41,6 +41,8 @@ export function SupplierForm({ initial, mode, onSubmit, pending, errors }: { ini
           <TextInput label="Main contact’s name" required value={v.contactName} onChange={set('contactName')} error={errors.contactName} />
           {mode === 'create' ? (
             <TextInput label="Main contact’s email" description="This becomes their login." type="email" required value={v.email} onChange={set('email')} error={errors.email} />
+          ) : mode === 'organiser' ? (
+            <TextInput label="Contact email" description="For Media10’s records. No login is made." type="email" required value={v.email} onChange={set('email')} error={errors.email} />
           ) : null}
           <TextInput label="Phone" value={v.phone} onChange={set('phone')} error={errors.phone} />
         </SimpleGrid>
@@ -75,7 +77,7 @@ export function SupplierForm({ initial, mode, onSubmit, pending, errors }: { ini
         </SimpleGrid>
         <Group>
           <Button type="submit" loading={pending}>
-            {mode === 'create' ? 'Add supplier and make their login' : 'Save details'}
+            {mode === 'create' ? 'Add supplier and make their login' : mode === 'organiser' ? 'Set up Media10’s own services' : 'Save details'}
           </Button>
         </Group>
       </Stack>

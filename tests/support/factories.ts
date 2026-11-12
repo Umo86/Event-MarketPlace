@@ -60,3 +60,23 @@ export async function lastEmailTo(email: string) {
 }
 
 export const ctx = { ip: '127.0.0.1', userAgent: 'vitest' };
+
+/** A supplier with its owner login (made the way a super admin makes one), and the owner as an actor. */
+export async function makeSupplier(over: Record<string, unknown> = {}) {
+  const { createSupplier } = await import('@/server/services/suppliers');
+  const { supplierUsers } = await import('@/server/db/schema');
+  const admin = await makeSuperAdmin();
+  const tag = randomUUID().slice(0, 6);
+  const { supplier } = await createSupplier(admin, {
+    name: `Supplier ${tag}`,
+    contactName: 'Pat Owner',
+    email: `owner-${tag}@supplier.example.com`,
+    vatRegistered: true,
+    invoicePrefix: `S${tag.replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase()}`,
+    ...over,
+  });
+  const db = await getDb();
+  const [link] = await db.select().from(supplierUsers).where(eq(supplierUsers.supplierId, supplier.id));
+  const [u] = await db.select().from(users).where(eq(users.id, link.userId));
+  return { supplier, owner: actorFor(u), admin };
+}

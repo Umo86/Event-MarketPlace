@@ -69,16 +69,42 @@ BOOTSTRAP_SUPER_ADMIN_EMAIL=you@media10.co.uk npm run bootstrap
 It prints an invitation link that works for 48 hours. Open it, confirm
 your email with the code you're sent, then set up two-factor sign-in.
 
-## 7. Stripe (phase 1 onwards, test mode first)
+## 7. Stripe (test mode first)
 
-1. In the Stripe dashboard, switch on **Connect** for the United Kingdom
-   and fill in the platform profile.
-2. Add two webhook endpoints (addresses and events will be listed here in
-   phase 1), and put each signing secret into Vercel.
-3. Use **test keys only** (`sk_test_…`) until the pilot.
+1. In the Stripe dashboard (in **test mode**), switch on **Connect** for the
+   United Kingdom and fill in the platform profile. Suppliers will use the
+   full Stripe dashboard and pay Stripe's fees themselves.
+2. Put the **test** secret key (`sk_test_…`) into Vercel as
+   `STRIPE_SECRET_KEY`, and the publishable key (`pk_test_…`) as
+   `STRIPE_PUBLISHABLE_KEY`.
+3. Add two webhook endpoints under Developers → Webhooks, and put each
+   one's signing secret (`whsec_…`) into Vercel:
 
-A Stripe key without both webhook secrets stops the site starting, on
-purpose: it would take money without being able to confirm it.
+| Endpoint | Listen to | Events | Secret goes in |
+| --- | --- | --- | --- |
+| `https://<your address>/api/webhooks/stripe/connect` | Events on **connected accounts** | `account.updated` now; from phase 2 also `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `refund.updated`, `charge.dispute.created`, `charge.dispute.updated`, `charge.dispute.closed`, `application_fee.refunded` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
+| `https://<your address>/api/webhooks/stripe/platform` | Events on **your account** | From phase 2: `setup_intent.succeeded`, `setup_intent.setup_failed`, `payment_intent.succeeded`, `payment_intent.payment_failed` | `STRIPE_WEBHOOK_SECRET` |
+
+4. Redeploy. On a supplier's Payments page, "Connect with Stripe" now goes
+   to Stripe's own set-up pages. In test mode Stripe lets you use its test
+   details (such as the test bank account `00012345`, sort code
+   `108800`) without real ID.
+
+Use **test keys only** until the pilot. A Stripe key without both webhook
+secrets stops the site starting, on purpose: it would take money without
+being able to confirm it. Without any Stripe key, a live site simply says
+card payments aren't switched on yet; the payment simulator never runs on
+a live address.
+
+If a supplier says they've finished with Stripe but still shows Stripe
+pending, open them under Suppliers and press "Check with Stripe".
+
+## 8. Daily jobs
+
+Vercel Cron calls `/api/cron/jobs` every 10 minutes (set in `vercel.json`).
+Besides sending queued emails, once a day it removes expired sign-in data
+and, from 8am, sends reminders about supplier documents that expire within
+30 days. Reminder emails only go once Resend is set up.
 
 ## Before the pilot (for your accountant)
 

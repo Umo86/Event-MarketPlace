@@ -22,6 +22,28 @@ pilot, and the pilot waits for the accountant's sign-off.**
   still go through; that supplier's part shows "Payment needed" with a Pay
   button.
 
+## Suppliers connecting Stripe (built in phase 1)
+
+- A supplier's owner presses **Connect with Stripe** on their Payments
+  page. The first time, we make their connected account on Media10's
+  platform (Stripe's Accounts v2, falling back to v1 if Stripe hasn't
+  switched v2 on for the platform yet). It uses the full Stripe dashboard;
+  the supplier pays Stripe's fees and Stripe covers losses, which suits
+  direct charges. Pressing twice makes one account, not two.
+- They then go to Stripe's own set-up pages (an Account Link) and come back
+  to their Payments page. If a link expires, Stripe sends them to
+  `/supplier/<id>/payments/stripe`, which makes a fresh link for the same
+  account.
+- We keep the `acct_…` id and three flags: `charges_enabled`,
+  `payouts_enabled`, `details_submitted`. They update from the
+  `account.updated` webhook and from **Check status**. A late, older event
+  never overwrites a newer answer.
+- A supplier is **Ready to sell** only when `charges_enabled` is true (and
+  they aren't paused). Until then their categories are hidden from
+  exhibitors.
+- Media10's own services (the "organiser" supplier) never connect: they're
+  charged on Media10's own account.
+
 ## Amounts
 
 - All money is whole pence (integers). Never decimals.
@@ -72,5 +94,7 @@ commission, and how. It's a platform setting, off until they decide.
 ## Trying it locally
 
 With no Stripe key on a developer's computer, a payment simulator stands
-in for card entry and supplier onboarding. No money moves. It can never
-run on a live web address.
+in for card entry and supplier onboarding. No money moves. Its stand-in
+for Stripe's set-up pages is `/supplier/test-onboarding`, which marks the
+test account as able to take payments. It can never run on a live web
+address: there, with no key, payments are simply off.

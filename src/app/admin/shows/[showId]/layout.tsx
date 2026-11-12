@@ -15,6 +15,7 @@ export default async function ShowLayout({ children, params }: LayoutProps<'/adm
   const tabs = [
     { label: 'Overview', href: base, exact: true },
     ...(exhibitors ? [{ label: 'Exhibitors', href: `${base}/exhibitors` }] : []),
+    { label: 'Categories', href: `${base}/categories` },
     ...(admin ? [{ label: 'Branding', href: `${base}/branding` }] : []),
     { label: 'Team', href: `${base}/team` },
     ...(admin ? [{ label: 'Settings', href: `${base}/settings` }] : []),

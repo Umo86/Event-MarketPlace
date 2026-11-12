@@ -79,6 +79,41 @@ export async function storeImage(
   return row;
 }
 
+export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Checks and stores a private document (an insurance certificate, say): a real PDF, PNG or JPEG,
+ * under 5 MB. Private files are only served after a permission check (src/app/files/[id]).
+ */
+export async function storeDocument(actor: Actor, input: { bytes: Uint8Array; name: string; supplierId: string }, opts: { tx?: DbLike } = {}): Promise<FileRow> {
+  if (!input.bytes.byteLength) throw invalid('That file is empty. Choose another.');
+  if (input.bytes.byteLength > DOCUMENT_MAX_BYTES) throw invalid('That file is too big. Use one under 5 MB.');
+  const { fileTypeFromBuffer } = await import('file-type');
+  const t = await fileTypeFromBuffer(input.bytes.subarray(0, 4100));
+  const mime = t?.mime === 'application/pdf' || t?.mime === 'image/png' || t?.mime === 'image/jpeg' ? t.mime : null;
+  if (!mime) throw invalid('Upload a PDF, PNG or JPEG file. This one isn’t.');
+  const storageKey = `document/${input.supplierId}/${randomUUID()}`;
+  const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : 'jpg';
+  const original = input.name.replace(/[^\w.\- ()]/g, '_').slice(0, 150) || `document.${ext}`;
+  await storage().put(storageKey, input.bytes, mime);
+  const db = opts.tx ?? (await getDb());
+  const [row] = await db
+    .insert(files)
+    .values({
+      storageKey,
+      originalName: original,
+      mimeType: mime,
+      sizeBytes: input.bytes.byteLength,
+      sha256: createHash('sha256').update(input.bytes).digest('hex'),
+      purpose: 'document',
+      supplierId: input.supplierId,
+      isPublic: false,
+      uploadedBy: actor.kind === 'user' ? actor.userId : null,
+    })
+    .returning();
+  return row;
+}
+
 export async function getFile(id: string): Promise<FileRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const db = await getDb();

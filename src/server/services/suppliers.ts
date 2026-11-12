@@ -104,6 +104,46 @@ export async function createSupplier(actor: UserActor, raw: z.input<typeof creat
   });
 }
 
+/**
+ * Media10 as its own supplier, for its own services (stand cleaning and the like). Charged on
+ * Media10's own Stripe account, so it never connects one, and no supplier login is made: Media10
+ * staff look after it. There is at most one.
+ */
+export async function createOrganiserSupplier(actor: UserActor, raw: z.input<typeof createSupplierSchema>) {
+  const input = createSupplierSchema.parse(raw);
+  await authorize(actor, 'suppliers.manage', {}, { write: true });
+  const db = await getDb();
+  return db.transaction(async (tx) => {
+    const [existing] = await tx.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.kind, 'organiser')).limit(1);
+    if (existing) throw conflict('Media10’s own services are already set up. Open them from the suppliers list.');
+    const [prefixTaken] = await tx
+      .select({ id: suppliers.id })
+      .from(suppliers)
+      .where(sql`upper(${suppliers.invoicePrefix}) = ${input.invoicePrefix}`)
+      .limit(1);
+    if (prefixTaken) throw invalid('Another supplier already uses that invoice prefix.', { invoicePrefix: 'Another supplier already uses that prefix. Choose another.' });
+    const [supplier] = await tx
+      .insert(suppliers)
+      .values({ ...input, kind: 'organiser', vatNumber: input.vatRegistered ? input.vatNumber : null, createdBy: actor.userId })
+      .returning();
+    await writeAudit(tx, actor, {
+      action: 'supplier.created',
+      summary: `Set up ${supplier.name} as the supplier for Media10’s own services`,
+      entityType: 'supplier',
+      entityId: supplier.id,
+      supplierId: supplier.id,
+      details: { kind: 'organiser' },
+    });
+    return supplier;
+  });
+}
+
+export async function hasOrganiserSupplier() {
+  const db = await getDb();
+  const [row] = await db.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.kind, 'organiser')).limit(1);
+  return Boolean(row);
+}
+
 export async function updateSupplier(actor: UserActor, supplierId: string, raw: z.input<typeof updateSupplierSchema>) {
   const input = updateSupplierSchema.parse(raw);
   await authorize(actor, 'suppliers.manage', {}, { write: true });
@@ -202,7 +242,7 @@ async function statusesFor(rows: SupplierRow[]) {
       ),
     );
   const seen = new Set(signedIn.map((r) => r.supplierId));
-  return new Map(rows.map((r) => [r.id, supplierStatus({ pausedAt: r.pausedAt, stripeChargesEnabled: r.stripeChargesEnabled, anyoneSignedIn: seen.has(r.id) })]));
+  return new Map(rows.map((r) => [r.id, supplierStatus({ kind: r.kind, pausedAt: r.pausedAt, stripeChargesEnabled: r.stripeChargesEnabled, anyoneSignedIn: seen.has(r.id) })]));
 }
 
 export async function listSuppliers(actor: Actor) {

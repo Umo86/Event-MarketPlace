@@ -1,7 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, date, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, id, tz, updatedAt } from './common';
-import { users } from './core';
+import { files, users } from './core';
+
+/**
+ * `company`: an outside supplier, paid straight into its own connected Stripe account.
+ * `organiser`: Media10 itself, for its own services (such as stand cleaning). Charged on Media10's
+ * own Stripe account, so it never connects one. There is at most one.
+ */
+export const SUPPLIER_KINDS = ['company', 'organiser'] as const;
+export type SupplierKind = (typeof SUPPLIER_KINDS)[number];
 
 /**
  * A supplier: a company exhibitors buy stand services from. Suppliers work across shows, so they
@@ -15,6 +23,7 @@ export const suppliers = pgTable(
   'suppliers',
   {
     id: id(),
+    kind: text('kind', { enum: SUPPLIER_KINDS }).notNull().default('company'),
     name: text('name').notNull(),
     /** The supplier's main contact, for Media10's records. Sign-in accounts are in supplier_users. */
     contactName: text('contact_name').notNull().default(''),
@@ -34,6 +43,8 @@ export const suppliers = pgTable(
     stripeChargesEnabled: boolean('stripe_charges_enabled').notNull().default(false),
     stripePayoutsEnabled: boolean('stripe_payouts_enabled').notNull().default(false),
     stripeDetailsSubmitted: boolean('stripe_details_submitted').notNull().default(false),
+    /** When Stripe last told us (webhook or "Check status"), so an older event never overwrites a newer one. */
+    stripeCheckedAt: timestamp('stripe_checked_at', tz),
     /** Paused suppliers' services are hidden and they take no new orders. Paid orders are untouched. */
     pausedAt: timestamp('paused_at', tz),
     pausedReason: text('paused_reason'),
@@ -45,6 +56,7 @@ export const suppliers = pgTable(
     uniqueIndex('suppliers_stripe_unique').on(t.stripeAccountId),
     uniqueIndex('suppliers_invoice_prefix_unique').on(sql`upper(${t.invoicePrefix})`),
     index('suppliers_name_idx').on(sql`lower(${t.name})`),
+    uniqueIndex('suppliers_one_organiser').on(t.kind).where(sql`${t.kind} = 'organiser'`),
   ],
 );
 
@@ -68,4 +80,34 @@ export const supplierUsers = pgTable(
     createdAt: createdAt(),
   },
   (t) => [primaryKey({ columns: [t.supplierId, t.userId] }), index('supplier_users_user_idx').on(t.userId)],
+);
+
+export const DOCUMENT_KINDS = ['public_liability', 'employers_liability', 'product_liability', 'risk_assessment', 'method_statement', 'other'] as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+/**
+ * A supplier's documents, such as public liability insurance. Files are private: only Media10,
+ * the supplier's own people and the teams of shows it supplies can open them. Reminders go 30 days
+ * before the expiry date; `reminderSentFor` records which expiry date was reminded about, so a
+ * renewed document gets its own reminder.
+ */
+export const supplierDocuments = pgTable(
+  'supplier_documents',
+  {
+    id: id(),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: DOCUMENT_KINDS }).notNull(),
+    title: text('title').notNull(),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => files.id),
+    /** The last day it is valid (a calendar date, no time). */
+    expiresOn: date('expires_on'),
+    reminderSentFor: date('reminder_sent_for'),
+    uploadedBy: uuid('uploaded_by'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('supplier_documents_supplier_idx').on(t.supplierId), index('supplier_documents_expiry_idx').on(t.expiresOn)],
 );

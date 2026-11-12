@@ -11,6 +11,10 @@ const handlers: Handlers = {
     const { purgeExpired } = await import('../services/housekeeping');
     await purgeExpired();
   },
+  document_reminders: async () => {
+    const { sendDocumentReminders } = await import('../services/documents');
+    await sendDocumentReminders();
+  },
 };
 
 export function runJobsNow(opts: { budgetMs?: number } = {}) {
@@ -36,9 +40,12 @@ export async function kickJobs(): Promise<void> {
   }
 }
 
-/** Vercel Cron, every ten minutes: anything left on the queue, and once a day the tidy-up. */
+/** Vercel Cron, every ten minutes: anything left on the queue, and once a day the tidy-up and document reminders. */
 export async function sweep(now = new Date()) {
-  await enqueue('purge_expired', {}, { dedupeKey: `purge:${now.toISOString().slice(0, 10)}`, once: true, maxAttempts: 2 });
+  const day = now.toISOString().slice(0, 10);
+  await enqueue('purge_expired', {}, { dedupeKey: `purge:${day}`, once: true, maxAttempts: 2 });
+  // From 8am UTC, so reminders arrive in working hours.
+  if (now.getUTCHours() >= 8) await enqueue('document_reminders', {}, { dedupeKey: `document-reminders:${day}`, once: true, maxAttempts: 3 });
   const ran = await runJobsNow({ budgetMs: 50_000 });
   const pruned = await pruneJobs(now);
   return { ...ran, pruned };

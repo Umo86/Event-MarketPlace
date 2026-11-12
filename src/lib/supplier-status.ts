@@ -1,8 +1,10 @@
 /** What a supplier's status is, worked out from the facts (pure, so admin and supplier pages agree). */
 export type SupplierStatus = 'invited' | 'stripe_pending' | 'ready' | 'paused';
 
-export function supplierStatus(s: { pausedAt: Date | null; stripeChargesEnabled: boolean; anyoneSignedIn: boolean }): SupplierStatus {
+export function supplierStatus(s: { kind?: 'company' | 'organiser'; pausedAt: Date | null; stripeChargesEnabled: boolean; anyoneSignedIn: boolean }): SupplierStatus {
   if (s.pausedAt) return 'paused';
+  // Media10's own services are charged on Media10's own Stripe account: nothing to connect.
+  if (s.kind === 'organiser') return 'ready';
   if (s.stripeChargesEnabled) return 'ready';
   if (!s.anyoneSignedIn) return 'invited';
   return 'stripe_pending';
@@ -28,6 +30,8 @@ export const SUPPLIER_STATUS_HELP: Record<SupplierStatus, string> = {
   ready: 'Connected to Stripe and able to take payments. Their services can be shown to exhibitors.',
   paused: 'Their services are hidden and they take no new orders. Paid orders are not affected.',
 };
+
+export const ORGANISER_HELP = 'Media10’s own services. They are charged on Media10’s own Stripe account, so there is nothing to connect.';
 
 /** An invoice prefix from the name: "Sparks Electrical Ltd" → "SE", "Carpetco" → "CAR". */
 export function suggestPrefix(name: string): string {

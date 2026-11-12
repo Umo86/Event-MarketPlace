@@ -1,6 +1,6 @@
 /**
- * Demo data for a developer's computer and the browser tests: a demo show, its exhibitor list and
- * staff accounts. Every address ends .test and the show is named as a demo.
+ * Demo data for a developer's computer and the browser tests: a demo show, its exhibitor list,
+ * staff accounts, demo suppliers and categories. Every address ends .test and the show is named as a demo.
  *   npm run seed
  * It refuses to run against a real database (DATABASE_URL set): never put invented exhibitors,
  * suppliers or orders in a live database.
@@ -76,6 +76,50 @@ async function main() {
       ),
     );
   }
+
+  // Demo suppliers, all marked (demo). Sparks still has to connect Stripe (the payment simulator
+  // stands in locally); Carpets is already "connected"; Media10's own services need nothing.
+  async function supplier(values: typeof schema.suppliers.$inferInsert, login?: { email: string; name: string }) {
+    const [existing] = await db.select().from(schema.suppliers).where(eq(schema.suppliers.invoicePrefix, values.invoicePrefix)).limit(1);
+    if (existing) return existing;
+    const [row] = await db.insert(schema.suppliers).values(values).returning();
+    if (login) {
+      const u = await user(login.email, login.name, { totpSecretEnc: null, totpEnabledAt: null, recoveryCodeHashes: [] });
+      await db.insert(schema.supplierUsers).values({ supplierId: row.id, userId: u.id, role: 'owner', canRefund: true, canEditCatalogue: true });
+    }
+    return row;
+  }
+  const sparks = await supplier(
+    { name: 'Bright Sparks Electrical (demo)', contactName: 'Pat Sparks', email: 'sparks@supplier.test', invoicePrefix: 'DSE', vatRegistered: true, vatNumber: 'GB000000000', city: 'London', postcode: 'E1 6AN' },
+    { email: 'sparks@supplier.test', name: 'Pat Sparks' },
+  );
+  const carpets = await supplier(
+    {
+      name: 'Carpet Co (demo)',
+      contactName: 'Lee Weaver',
+      email: 'carpets@supplier.test',
+      invoicePrefix: 'DCC',
+      vatRegistered: true,
+      stripeAccountId: 'acct_simdemocarpets',
+      stripeChargesEnabled: true,
+      stripePayoutsEnabled: true,
+      stripeDetailsSubmitted: true,
+      stripeCheckedAt: new Date(),
+    },
+    { email: 'carpets@supplier.test', name: 'Lee Weaver' },
+  );
+  const [organiser] = await db.select().from(schema.suppliers).where(eq(schema.suppliers.kind, 'organiser')).limit(1);
+  const media10 = organiser ?? (await supplier({ kind: 'organiser', name: 'Media10 (demo)', contactName: 'Show team', email: 'ops@marketplace.test', invoicePrefix: 'DM10', vatRegistered: true }));
+  const cats = await db.select().from(schema.showCategories).where(eq(schema.showCategories.showId, show.id));
+  if (!cats.length) {
+    await db.insert(schema.showCategories).values([
+      { showId: show.id, name: 'Electrics', description: 'Sockets, lighting and power', supplierId: sparks.id, sort: 0 },
+      { showId: show.id, name: 'Carpet', description: 'Carpet tiles and roll carpet in show colours', supplierId: carpets.id, sort: 1 },
+      { showId: show.id, name: 'Stand cleaning', description: 'Nightly vacuum and bin empty', supplierId: media10.id, sort: 2 },
+      { showId: show.id, name: 'Furniture', description: 'Chairs, tables and counters', supplierId: null, sort: 3 },
+    ]);
+  }
+
   await closeDb();
   console.log(`
 Demo data ready (local database only).
@@ -84,6 +128,8 @@ Demo data ready (local database only).
     ${admin.email} (super admin), ${showAdmin.email} (show admin), ${team.email} (team member)
     Password: ${password}
     Two-factor key for your authenticator app: ${totp}
+  Supplier panel: sparks@supplier.test (not connected to Stripe yet), carpets@supplier.test (ready)
+    Same password, no two-factor.
   Sign-in codes appear at http://localhost:3000/dev/mailbox
 `);
 }

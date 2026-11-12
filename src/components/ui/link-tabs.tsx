@@ -5,10 +5,10 @@ import { usePathname } from 'next/navigation';
 import { Group, UnstyledButton } from '@mantine/core';
 
 /** Tabs that are links (each tab is its own page), underlined when current. */
-export function LinkTabs({ tabs }: { tabs: { label: string; href: string; exact?: boolean }[] }) {
+export function LinkTabs({ tabs, label = 'Show sections' }: { tabs: { label: string; href: string; exact?: boolean }[]; label?: string }) {
   const pathname = usePathname();
   return (
-    <Group gap={4} component="nav" aria-label="Show sections" style={{ borderBottom: '1px solid var(--em-line)', overflowX: 'auto', flexWrap: 'nowrap' }}>
+    <Group gap={4} component="nav" aria-label={label} style={{ borderBottom: '1px solid var(--em-line)', overflowX: 'auto', flexWrap: 'nowrap' }}>
       {tabs.map((t) => {
         const active = t.exact ? pathname === t.href : pathname === t.href || pathname.startsWith(`${t.href}/`);
         return (

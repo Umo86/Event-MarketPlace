@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, eq } from 'drizzle-orm';
 import { getDb, type DbLike } from '../db/client';
-import { SHOW_PERMISSIONS, showStaff, shows, supplierUsers, type ShowPermission, type ShowRole, type SupplierRole } from '../db/schema';
+import { SHOW_PERMISSIONS, showCategories, showStaff, shows, supplierUsers, type ShowPermission, type ShowRole, type SupplierRole } from '../db/schema';
 import { forbidden, notFound, readOnly } from '../errors';
 import type { Actor, ExhibitorActor, UserActor } from '../auth/actor';
 
@@ -28,6 +28,11 @@ type Rule =
   | { scope: 'show'; permission: ShowPermission }
   /** People who sign in for a supplier: `owner` for the owner only. */
   | { scope: 'supplier'; role: 'any' | 'owner' }
+  /**
+   * A supplier's records (documents): super admins and the supplier's owner may change them; the
+   * supplier's people and the teams of shows it supplies may read them.
+   */
+  | { scope: 'supplier_records'; manage: boolean }
   /** Exhibitors signed in to that show's storefront. */
   | { scope: 'storefront' };
 
@@ -53,6 +58,8 @@ export const ACTIONS = {
   'show.team.manage': { scope: 'show', role: 'show_admin' },
   'show.connection.manage': { scope: 'show', role: 'show_admin' },
   'show.audit.view': { scope: 'show', role: 'show_admin' },
+  /** Categories and which supplier serves each. */
+  'categories.manage': { scope: 'show', role: 'show_admin' },
   'exhibitors.view': { scope: 'show', permission: 'exhibitors' },
   'exhibitors.manage': { scope: 'show', permission: 'exhibitors' },
   'orders.view': { scope: 'show', permission: 'orders' },
@@ -62,6 +69,8 @@ export const ACTIONS = {
   // A supplier's own panel
   'supplier.view': { scope: 'supplier', role: 'any' },
   'supplier.manage': { scope: 'supplier', role: 'owner' },
+  'supplier.documents.view': { scope: 'supplier_records', manage: false },
+  'supplier.documents.manage': { scope: 'supplier_records', manage: true },
 
   // The storefront
   'storefront.browse': { scope: 'storefront' },
@@ -138,6 +147,32 @@ export async function authorize(actor: Actor | null, action: ActionName, target:
       if (!member) throw notFound();
       if (rule.role === 'owner' && member.role !== 'owner') throw forbidden();
       return { actor, access: null, supplierRole: member.role };
+    }
+    case 'supplier_records': {
+      if (!target.supplierId) throw new Error(`${action} needs a supplier`);
+      if (actor.kind !== 'user') throw notFound();
+      if (actor.isSuperAdmin && !actor.readOnly) return { actor, access: null };
+      if (actor.readOnly) throw notFound();
+      const d = opts.db ?? (await getDb());
+      const [member] = await d
+        .select({ role: supplierUsers.role })
+        .from(supplierUsers)
+        .where(and(eq(supplierUsers.supplierId, target.supplierId), eq(supplierUsers.userId, actor.userId)))
+        .limit(1);
+      if (member) {
+        if (rule.manage && member.role !== 'owner') throw forbidden();
+        return { actor, access: null, supplierRole: member.role };
+      }
+      // Staff of a show this supplier serves may read, never change.
+      const [served] = await d
+        .select({ showId: showCategories.showId })
+        .from(showCategories)
+        .innerJoin(showStaff, and(eq(showStaff.showId, showCategories.showId), eq(showStaff.userId, actor.userId)))
+        .where(eq(showCategories.supplierId, target.supplierId))
+        .limit(1);
+      if (!served) throw notFound();
+      if (rule.manage) throw forbidden();
+      return { actor, access: null };
     }
     case 'storefront': {
       // Only someone signed in to this show's own storefront.

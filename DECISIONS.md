@@ -103,7 +103,46 @@ drift from the facts. Pausing needs a reason, which the supplier sees.
 
 **Suppliers belong to the platform, not a show**, because one supplier
 serves many shows. Only super admins add them. Show admins assign them to
-their shows' categories (next part of the build).
+their shows' categories.
+
+**Connecting Stripe** (12 November 2026). The supplier's owner presses
+"Connect with Stripe" on their Payments page; staff can't, but anyone on
+the team can press "Check status". We make the connected account with
+Stripe's Accounts v2 (falling back to v1 if the platform can't use v2 yet),
+with the full Stripe dashboard, the supplier paying Stripe's fees and
+Stripe covering losses: the usual set-up for direct charges. An
+idempotency key per supplier means one account however often it's pressed.
+Status comes from the `account.updated` webhook and "Check status"; each
+answer is stamped with when Stripe gave it, so a late, older webhook can't
+undo a newer one. Ready to sell needs `charges_enabled`.
+
+**Media10's own services are a supplier of their own kind** ("organiser").
+There's at most one. It has no logins and never connects Stripe, because
+those lines are charged on Media10's own account; it's Ready to sell unless
+paused. Show admins pick it for categories such as stand cleaning, like any
+other supplier.
+
+**Categories belong to a show, with one supplier each.** "One supplier per
+category per show" holds because a category has a single supplier field,
+not a list. A category shows on the storefront only when its supplier is
+Ready to sell, and disappears again if they're paused. A supplier with
+categories can't be deleted from under them (the database refuses).
+
+**Documents are private.** Insurance and other documents are only served
+to someone signed in who may see them: super admins, the supplier's own
+people, and the team of a show the supplier serves (read only). The
+supplier's owner or a super admin adds and removes them. PDFs, PNGs and
+JPEGs up to 5 MB, the real type checked from the contents; PDFs download
+rather than open, so nothing in them can run on our site. Insurance must
+have an expiry date (the last valid day, UK time).
+
+**Expiry reminders** go 30 days before, once per expiry date, to the
+supplier's people and the admins of the shows they supply; every page about
+the supplier shows a warning from then on. Uploading a newer document of
+the same kind replaces the old one, so its reminder and warning stop. These
+are emails, which is different from the supplier logins Umit passes on by
+hand: they only go once Resend is set up, and until then each is recorded
+as not sent, so nothing is lost.
 
 ## Branding
 
