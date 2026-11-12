@@ -151,7 +151,7 @@ export async function endExhibitorSession(sessionId: string) {
 export async function myStands(actor: ExhibitorActor) {
   const db = await getDb();
   return db
-    .select({ standId: stands.id, number: stands.number, company: stands.companyName, hall: halls.name, standType: standTypes.name, standTypeId: stands.standTypeId, contactName: exhibitorContacts.name })
+    .select({ standId: stands.id, number: stands.number, company: stands.companyName, hall: halls.name, standType: standTypes.name, standTypeId: stands.standTypeId, standTypeKey: standTypes.key, contactName: exhibitorContacts.name })
     .from(exhibitorContacts)
     .innerJoin(stands, eq(stands.id, exhibitorContacts.standId))
     .leftJoin(halls, eq(halls.id, stands.hallId))

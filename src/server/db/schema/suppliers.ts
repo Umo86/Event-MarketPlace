@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
-import { boolean, date, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { createdAt, id, tz, updatedAt } from './common';
+import { boolean, date, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { COMMISSION_TYPES, createdAt, id, tz, updatedAt } from './common';
 import { files, users } from './core';
 
 /**
@@ -46,6 +46,9 @@ export const suppliers = pgTable(
     /** When Stripe last told us (webhook or "Check status"), so an older event never overwrites a newer one. */
     stripeCheckedAt: timestamp('stripe_checked_at', tz),
     /** Paused suppliers' services are hidden and they take no new orders. Paid orders are untouched. */
+    /** This supplier's commission at every show, unless a category or product sets its own. Super admins only. */
+    commissionType: text('commission_type', { enum: COMMISSION_TYPES }),
+    commissionValue: integer('commission_value'),
     pausedAt: timestamp('paused_at', tz),
     pausedReason: text('paused_reason'),
     createdBy: uuid('created_by'),

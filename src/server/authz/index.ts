@@ -26,8 +26,11 @@ type Rule =
   | { scope: 'show'; role: 'show_admin' }
   | { scope: 'show'; role: 'any' }
   | { scope: 'show'; permission: ShowPermission }
-  /** People who sign in for a supplier: `owner` for the owner only. */
-  | { scope: 'supplier'; role: 'any' | 'owner' }
+  /**
+   * People who sign in for a supplier: `owner` for the owner only; `catalogue` and `refund` for the
+   * owner and staff the owner has given that right.
+   */
+  | { scope: 'supplier'; role: 'any' | 'owner' | 'catalogue' | 'refund' }
   /**
    * A supplier's records (documents): super admins and the supplier's owner may change them; the
    * supplier's people and the teams of shows it supplies may read them.
@@ -60,6 +63,9 @@ export const ACTIONS = {
   'show.audit.view': { scope: 'show', role: 'show_admin' },
   /** Categories and which supplier serves each. */
   'categories.manage': { scope: 'show', role: 'show_admin' },
+  /** Approving suppliers' products and price changes, and setting commission. */
+  'products.approve': { scope: 'show', role: 'show_admin' },
+  'commission.manage': { scope: 'show', role: 'show_admin' },
   'exhibitors.view': { scope: 'show', permission: 'exhibitors' },
   'exhibitors.manage': { scope: 'show', permission: 'exhibitors' },
   'orders.view': { scope: 'show', permission: 'orders' },
@@ -69,6 +75,8 @@ export const ACTIONS = {
   // A supplier's own panel
   'supplier.view': { scope: 'supplier', role: 'any' },
   'supplier.manage': { scope: 'supplier', role: 'owner' },
+  'supplier.catalogue.edit': { scope: 'supplier', role: 'catalogue' },
+  'supplier.refund': { scope: 'supplier', role: 'refund' },
   'supplier.documents.view': { scope: 'supplier_records', manage: false },
   'supplier.documents.manage': { scope: 'supplier_records', manage: true },
 
@@ -140,12 +148,15 @@ export async function authorize(actor: Actor | null, action: ActionName, target:
       if (actor.kind !== 'user' || actor.readOnly) throw notFound();
       const d = opts.db ?? (await getDb());
       const [member] = await d
-        .select({ role: supplierUsers.role })
+        .select({ role: supplierUsers.role, canEditCatalogue: supplierUsers.canEditCatalogue, canRefund: supplierUsers.canRefund })
         .from(supplierUsers)
         .where(and(eq(supplierUsers.supplierId, target.supplierId), eq(supplierUsers.userId, actor.userId)))
         .limit(1);
       if (!member) throw notFound();
-      if (rule.role === 'owner' && member.role !== 'owner') throw forbidden();
+      const owner = member.role === 'owner';
+      if (rule.role === 'owner' && !owner) throw forbidden();
+      if (rule.role === 'catalogue' && !owner && !member.canEditCatalogue) throw forbidden();
+      if (rule.role === 'refund' && !owner && !member.canRefund) throw forbidden();
       return { actor, access: null, supplierRole: member.role };
     }
     case 'supplier_records': {

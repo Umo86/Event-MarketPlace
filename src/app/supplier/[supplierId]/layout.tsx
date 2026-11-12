@@ -9,6 +9,7 @@ export default async function SupplierPanelLayout({ children, params }: LayoutPr
   const base = `/supplier/${supplierId}`;
   const tabs = [
     { label: 'Overview', href: base, exact: true },
+    { label: 'Catalogue', href: `${base}/catalogue` },
     ...(supplier.kind === 'company' ? [{ label: 'Payments', href: `${base}/payments` }] : []),
     { label: 'Documents', href: `${base}/documents` },
   ];

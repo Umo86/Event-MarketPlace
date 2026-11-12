@@ -62,6 +62,8 @@ export async function listCategories(actor: Actor, showId: string) {
       supplierKind: suppliers.kind,
       pausedAt: suppliers.pausedAt,
       chargesEnabled: suppliers.stripeChargesEnabled,
+      commissionType: showCategories.commissionType,
+      commissionValue: showCategories.commissionValue,
     })
     .from(showCategories)
     .leftJoin(suppliers, eq(suppliers.id, showCategories.supplierId))
@@ -71,6 +73,8 @@ export async function listCategories(actor: Actor, showId: string) {
     id: r.id,
     name: r.name,
     description: r.description,
+    commissionType: r.commissionType,
+    commissionValue: r.commissionValue,
     supplier: r.supplierId
       ? {
           id: r.supplierId,

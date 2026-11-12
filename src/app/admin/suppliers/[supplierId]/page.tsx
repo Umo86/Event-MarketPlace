@@ -16,6 +16,7 @@ import { showsForSupplier } from '@/server/services/categories';
 import { documentRows, documentWarnings, listDocuments } from '@/server/services/documents';
 import { SupplierAdminControls } from './supplier-controls';
 import { AdminCheckStripe } from './check-stripe';
+import { CommissionField } from '@/components/catalogue/commission-field';
 
 export const metadata: Metadata = { title: 'Supplier' };
 
@@ -59,6 +60,11 @@ export default async function SupplierPage({ params }: PageProps<'/admin/supplie
             </Group>
           )}
         </Panel>
+        {organiser ? null : (
+          <Panel title="Commission" description="Media10’s fee on this supplier’s lines at every show, unless a show’s category or product sets its own.">
+            <CommissionField target={{ kind: 'supplier', supplierId: s.id }} type={s.commissionType} value={s.commissionValue} label="This supplier" fallbackLabel="Use each show’s" />
+          </Panel>
+        )}
         <Panel title="Shows" description="Show admins choose which supplier serves each category, on the show’s Categories page.">
           {served.length ? (
             <Stack gap={6}>

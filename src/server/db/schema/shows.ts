@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { createdAt, id, tz, updatedAt } from './common';
+import { COMMISSION_TYPES, createdAt, id, tz, updatedAt } from './common';
 import { users } from './core';
 import type { ShowBranding } from '../../../lib/branding';
 
@@ -23,6 +23,9 @@ export const shows = pgTable(
     timezone: text('timezone').notNull().default('Europe/London'),
     currency: text('currency').notNull().default('GBP'),
     vatRateBps: integer('vat_rate_bps').notNull().default(2000),
+    /** The show's commission, unless a supplier, category or product sets its own. */
+    commissionType: text('commission_type', { enum: COMMISSION_TYPES }),
+    commissionValue: integer('commission_value'),
     /** Name, logos, colours, banner, favicon and email sender name. Validated before saving. */
     branding: jsonb('branding').$type<ShowBranding>().notNull().default({}),
     /** Ordering dates. Early-bird prices apply until earlyBirdEndsAt; late prices from latePricesFrom. */

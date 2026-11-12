@@ -23,6 +23,11 @@ const SETTINGS = {
    * How commission is treated for VAT. Left for Umit's accountant to decide (DECISIONS.md, "Money");
    * nothing charges VAT on commission until they set it.
    */
+  /** Media10's commission when nothing more specific is set (product, category, supplier, show). */
+  commissionDefault: {
+    schema: z.object({ type: z.enum(['percent', 'fixed']), value: z.number().int().min(0).max(1_000_000) }),
+    fallback: { type: 'percent', value: 0 } as { type: 'percent' | 'fixed'; value: number },
+  },
   commissionVat: {
     schema: z.object({ chargeVat: z.boolean(), rateBps: z.number().int().min(0).max(10_000) }),
     fallback: { chargeVat: false, rateBps: 2000 },
