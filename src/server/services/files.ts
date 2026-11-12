@@ -114,6 +114,36 @@ export async function storeDocument(actor: Actor, input: { bytes: Uint8Array; na
   return row;
 }
 
+/** Stores a file we made ourselves (an invoice PDF): private, never from a person's upload. */
+export async function storeGenerated(input: { bytes: Uint8Array; name: string; mimeType: string; purpose: FilePurpose; showId?: string | null; supplierId?: string | null }, opts: { tx?: DbLike } = {}): Promise<FileRow> {
+  const storageKey = `${input.purpose}/${input.supplierId ?? input.showId ?? 'platform'}/${randomUUID()}`;
+  await storage().put(storageKey, input.bytes, input.mimeType);
+  const db = opts.tx ?? (await getDb());
+  const [row] = await db
+    .insert(files)
+    .values({
+      storageKey,
+      originalName: input.name.replace(/[^\w.\- ()]/g, '_').slice(0, 150),
+      mimeType: input.mimeType,
+      sizeBytes: input.bytes.byteLength,
+      sha256: createHash('sha256').update(input.bytes).digest('hex'),
+      purpose: input.purpose,
+      showId: input.showId ?? null,
+      supplierId: input.supplierId ?? null,
+      isPublic: false,
+      uploadedBy: null,
+    })
+    .returning();
+  return row;
+}
+
+/** A stored file's bytes (for attaching to an email or putting a logo on an invoice). */
+export async function readFileBytes(file: FileRow): Promise<Uint8Array | null> {
+  const body = await storage().stream(file.storageKey);
+  if (!body) return null;
+  return new Uint8Array(await new Response(body).arrayBuffer());
+}
+
 export async function getFile(id: string): Promise<FileRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
   const db = await getDb();

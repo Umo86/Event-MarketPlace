@@ -171,14 +171,14 @@ export async function simulatedAccountSupplier(actor: UserActor, accountId: stri
  */
 export async function handleConnectEvent(event: StripeEventLite): Promise<'applied' | 'duplicate' | 'ignored'> {
   const db = await getDb();
-  return db.transaction(async (tx) => {
+  const first = await db.transaction(async (tx): Promise<'applied' | 'duplicate' | 'ignored' | 'other'> => {
     const [fresh] = await tx
       .insert(stripeEvents)
       .values({ id: event.id, endpoint: 'connect', type: event.type, account: event.account })
       .onConflictDoNothing()
       .returning({ id: stripeEvents.id });
     if (!fresh) return 'duplicate';
-    if (event.type !== 'account.updated') return 'ignored';
+    if (event.type !== 'account.updated') return 'other';
     const account = event.account ?? (typeof event.object.id === 'string' ? event.object.id : null);
     if (!account) return 'ignored';
     const [row] = await tx.select({ id: suppliers.id }).from(suppliers).where(eq(suppliers.stripeAccountId, account)).limit(1);
@@ -186,4 +186,39 @@ export async function handleConnectEvent(event: StripeEventLite): Promise<'appli
     await applyAccountFlags(tx, systemActor('Stripe webhook'), row.id, flagsFromAccount(event.object as Parameters<typeof flagsFromAccount>[0]), new Date(event.created * 1000));
     return 'applied';
   });
+  if (first !== 'other') return first;
+  // Payments, refunds and disputes on suppliers' accounts. Each handler only moves things forward
+  // and is safe to run twice; the event id above makes sure it normally runs once.
+  return applyMoneyEvent(event);
+}
+
+/** Money events, from either endpoint (`account` is null for Media10's own account). */
+export async function applyMoneyEvent(event: StripeEventLite): Promise<'applied' | 'ignored'> {
+  const o = event.object as Record<string, unknown> & { id?: string; payment_intent?: string | null; latest_charge?: string | null; last_payment_error?: { message?: string } | null };
+  const { applyPaymentIntentEvent } = await import('./orders');
+  const { reconcileRefunds, applyDispute, applyFeeRefunded } = await import('./refunds');
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      return (await applyPaymentIntentEvent(String(o.id), { succeeded: true, chargeId: typeof o.latest_charge === 'string' ? o.latest_charge : null })) === 'applied' ? 'applied' : 'ignored';
+    case 'payment_intent.payment_failed':
+      return (await applyPaymentIntentEvent(String(o.id), { succeeded: false, chargeId: null, message: o.last_payment_error?.message ?? null })) === 'applied' ? 'applied' : 'ignored';
+    case 'charge.refunded':
+    case 'refund.created':
+    case 'refund.updated':
+    case 'refund.failed':
+      if (typeof o.payment_intent !== 'string') return 'ignored';
+      return (await reconcileRefunds(event.account, o.payment_intent)) > 0 ? 'applied' : 'ignored';
+    case 'charge.dispute.created':
+    case 'charge.dispute.updated':
+    case 'charge.dispute.closed':
+      return applyDispute(event.account, o as never);
+    case 'application_fee.refunded': {
+      const charge = typeof o.originating_transaction === 'string' ? o.originating_transaction : typeof o.charge === 'string' ? o.charge : null;
+      if (!charge || typeof o.amount_refunded !== 'number') return 'ignored';
+      await applyFeeRefunded(charge, o.amount_refunded);
+      return 'applied';
+    }
+    default:
+      return 'ignored';
+  }
 }

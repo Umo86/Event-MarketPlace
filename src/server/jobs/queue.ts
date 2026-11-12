@@ -10,7 +10,7 @@ import { jobs } from '../db/schema';
  * try the job stays "failed" for a person to see. Work starts straight after the request that
  * queued it (kickJobs) and Vercel Cron sweeps the queue (/api/cron/jobs).
  */
-export const JOB_KINDS = ['send_email', 'purge_expired', 'document_reminders'] as const;
+export const JOB_KINDS = ['send_email', 'purge_expired', 'document_reminders', 'order_paid', 'release_holds', 'refund_succeeded'] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
 export type Job = typeof jobs.$inferSelect;

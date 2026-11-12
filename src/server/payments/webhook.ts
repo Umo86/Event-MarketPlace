@@ -2,7 +2,10 @@ import 'server-only';
 import { getDb } from '../db/client';
 import { stripeEvents } from '../db/schema';
 import { consumeRateLimit } from '../security/rate-limit';
-import { handleConnectEvent } from '../services/connect';
+import { applyMoneyEvent, handleConnectEvent } from '../services/connect';
+import { chargeOrder } from '../services/orders';
+import { orders } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { payments, WebhookSignatureError } from './provider';
 
 /**
@@ -42,14 +45,37 @@ export async function receiveStripeWebhook(req: Request, endpoint: 'platform' | 
       const result = await handleConnectEvent(event);
       return reply(200, { received: true, result });
     }
-    // Platform events (SetupIntents, Media10's own charges) are handled from phase 2. Record them
-    // now so nothing is applied twice once they are.
+    // Media10's own account: saved cards (SetupIntents) and Media10's own charges.
     const db = await getDb();
-    await db.insert(stripeEvents).values({ id: event.id, endpoint, type: event.type, account: event.account }).onConflictDoNothing();
-    return reply(200, { received: true, result: 'ignored' });
+    const [fresh] = await db.insert(stripeEvents).values({ id: event.id, endpoint, type: event.type, account: event.account }).onConflictDoNothing().returning({ id: stripeEvents.id });
+    if (!fresh) return reply(200, { received: true, result: 'duplicate' });
+    if (event.type === 'setup_intent.succeeded') {
+      const result = await chargeAfterSetup(event.object);
+      return reply(200, { received: true, result });
+    }
+    const result = await applyMoneyEvent({ ...event, account: null });
+    return reply(200, { received: true, result });
   } catch (err) {
     // A 500 makes Stripe send it again later, which is what we want if our database hiccupped.
     console.error(`Stripe ${endpoint} webhook ${event.type} ${event.id} failed:`, err instanceof Error ? err.message : err);
     return reply(500, { error: 'Not applied; send again' });
   }
+}
+
+/**
+ * A card was saved (in case the person closed the page before we charged): charge the order's
+ * unpaid parts. chargeOrder locks each part and uses the same idempotency key as the page would,
+ * so this never charges twice.
+ */
+async function chargeAfterSetup(si: Record<string, unknown>) {
+  const id = typeof si.id === 'string' ? si.id : null;
+  const pm = typeof si.payment_method === 'string' ? si.payment_method : null;
+  if (!id || !pm) return 'ignored';
+  const db = await getDb();
+  const [order] = await db.select().from(orders).where(eq(orders.stripeSetupIntentId, id)).limit(1);
+  if (!order) return 'ignored';
+  if (!order.stripePaymentMethodId) await db.update(orders).set({ stripePaymentMethodId: pm }).where(eq(orders.id, order.id));
+  if (order.stripePaymentMethodId && order.stripePaymentMethodId !== pm) return 'ignored';
+  await chargeOrder(order.id);
+  return 'applied';
 }

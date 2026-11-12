@@ -5,6 +5,7 @@ import { fileUrl } from '@/server/services/files';
 import { getExhibitor } from '@/server/auth/current';
 import { loadStorefront } from './load';
 import { storefrontSignOutAction } from './actions';
+import { basketCount } from '@/server/services/orders';
 import styles from './storefront.module.css';
 
 export async function generateMetadata({ params }: LayoutProps<'/[show]'>): Promise<Metadata> {
@@ -22,6 +23,7 @@ export default async function StorefrontLayout({ children, params }: LayoutProps
   const { show: slug } = await params;
   const { show, branding } = await loadStorefront(slug);
   const exhibitor = await getExhibitor(show.id);
+  const inBasket = exhibitor ? await basketCount(exhibitor) : 0;
   const light = fileUrl(branding.logoLightFileId);
   const logo = light ?? fileUrl(branding.logoFileId);
   return (
@@ -40,6 +42,19 @@ export default async function StorefrontLayout({ children, params }: LayoutProps
             <span className={styles.name}>{branding.marketplaceName}</span>
           </Link>
           <nav className={styles.headerLinks} aria-label="Storefront">
+            {exhibitor ? (
+              <>
+                <Link className={styles.headerLink} href={`/${show.slug}/shop`}>
+                  Order services
+                </Link>
+                <Link className={styles.headerLink} href={`/${show.slug}/basket`}>
+                  Basket{inBasket ? ` (${inBasket})` : ''}
+                </Link>
+                <Link className={styles.headerLink} href={`/${show.slug}/orders`}>
+                  Your orders
+                </Link>
+              </>
+            ) : null}
             {show.helpEmail ? (
               <a className={styles.headerLink} href={`mailto:${show.helpEmail}`}>
                 Help

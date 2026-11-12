@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 /** Stands in for Stripe in these tests and records what was asked of it. */
-class FakeStripe implements PaymentsProvider {
+class FakeStripe {
   kind = 'stripe' as const;
   testMode = true;
   created: { idempotencyKey: string; email: string }[] = [];
@@ -54,7 +54,7 @@ const readRow = async (id: string) => {
 describe('connecting a supplier to Stripe', () => {
   it('makes one connected account, sends the owner to Stripe, and is Ready to sell once Stripe says so', async () => {
     const fake = new FakeStripe();
-    setPaymentsForTests(fake);
+    setPaymentsForTests(fake as unknown as PaymentsProvider);
     const { supplier, owner, admin } = await makeSupplier();
     const url = await startStripeOnboarding(owner, supplier.id);
     expect(url).toMatch(/^https:\/\/connect\.stripe\.com\//);
@@ -77,7 +77,7 @@ describe('connecting a supplier to Stripe', () => {
   });
 
   it('is for the supplier’s owner only, and never for Media10’s own services', async () => {
-    setPaymentsForTests(new FakeStripe());
+    setPaymentsForTests(new FakeStripe() as unknown as PaymentsProvider);
     const { supplier, admin } = await makeSupplier();
     const staff = await makeUser();
     const db = await getDb();
@@ -112,7 +112,7 @@ describe('connecting a supplier to Stripe', () => {
   });
 
   it('never runs the simulator’s finish step when Stripe is in use', async () => {
-    setPaymentsForTests(new FakeStripe());
+    setPaymentsForTests(new FakeStripe() as unknown as PaymentsProvider);
     const { owner } = await makeSupplier();
     await expect(finishSimulatedOnboarding(owner, 'acct_simabc123')).rejects.toMatchObject({ code: 'not_found' });
   });

@@ -18,9 +18,11 @@ export function proxy(request: NextRequest) {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`,
     // Mantine sets CSS variables through style attributes, which nonces cannot cover.
     `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: blob:${storageOrigin}`,
+    `img-src 'self' data: blob: https://*.stripe.com${storageOrigin}`,
     `font-src 'self' data:`,
-    `connect-src 'self'${storageOrigin}${isDev ? ' ws: wss:' : ''}`,
+    // Stripe's Payment Element (card details go to Stripe, never to us).
+    `connect-src 'self' https://api.stripe.com https://*.stripe.com${storageOrigin}${isDev ? ' ws: wss:' : ''}`,
+    `frame-src https://js.stripe.com https://hooks.stripe.com https://*.stripe.com`,
     `object-src 'none'`,
     `base-uri 'self'`,
     `form-action 'self'`,

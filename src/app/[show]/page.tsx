@@ -8,6 +8,7 @@ import { storefrontCategories } from '@/server/services/categories';
 import { canOrder, orderingState, type OrderingState } from '@/lib/ordering';
 import { dateTime } from '@/lib/format';
 import { loadStorefront } from './load';
+import { LinkButton } from '@/components/ui/links';
 import styles from './storefront.module.css';
 
 export const metadata: Metadata = { title: 'Home' };
@@ -133,9 +134,9 @@ export default async function StorefrontHome({ params }: PageProps<'/[show]'>) {
                 </Paper>
               ))}
             </SimpleGrid>
-            <Text fz="sm" c="dimmed">
-              Products and prices are on their way. You’ll be able to order them here soon.
-            </Text>
+            <Group>
+              <LinkButton href={`/${show.slug}/shop`}>Order services</LinkButton>
+            </Group>
           </Stack>
         ) : (
           <Text fz="sm" c="dimmed">

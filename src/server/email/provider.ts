@@ -10,6 +10,7 @@ export type OutgoingEmail = {
   html: string;
   text: string;
   headers?: Record<string, string>;
+  attachments?: { filename: string; content: Uint8Array }[];
 };
 
 export interface EmailProvider {
@@ -33,6 +34,7 @@ class ResendProvider implements EmailProvider {
       text: email.text,
       replyTo: email.replyTo ?? undefined,
       headers: email.headers,
+      attachments: email.attachments?.map((a) => ({ filename: a.filename, content: Buffer.from(a.content) })),
     });
     if (error || !data) throw new Error(`Resend rejected the email: ${error?.message ?? 'unknown error'}`);
     return { id: data.id };

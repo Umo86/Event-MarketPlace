@@ -18,6 +18,8 @@ export type SendEmailInput = {
   /** The sender name, e.g. "UKCW London Marketplace". The address is always the one verified domain. */
   senderName?: string | null;
   replyTo?: string | null;
+  /** Private files to attach, such as invoice PDFs. */
+  attachmentFileIds?: string[];
 };
 
 const PLAIN_ADDRESS = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/;
@@ -70,6 +72,7 @@ export async function queueEmail(input: SendEmailInput, opts: { tx?: DbLike } = 
       subject: keep(oneLine(input.subject).slice(0, 300)),
       html: keep(input.html),
       text: keep(input.text),
+      attachmentFileIds: input.attachmentFileIds ?? [],
       status: notSent ? 'suppressed' : 'queued',
       error: notSent,
     })
@@ -90,7 +93,17 @@ export async function deliverOutboxEmail(outboxId: string): Promise<'sent' | 'sk
     .returning({ id: emailOutbox.id });
   if (!claimed) return 'skipped';
   try {
+    const attachments: { filename: string; content: Uint8Array }[] = [];
+    if (mail.attachmentFileIds.length) {
+      const { getFile, readFileBytes } = await import('../services/files');
+      for (const fileId of mail.attachmentFileIds) {
+        const file = await getFile(fileId);
+        const bytes = file ? await readFileBytes(file) : null;
+        if (file && bytes) attachments.push({ filename: file.originalName, content: bytes });
+      }
+    }
     const result = await emailProvider().send({
+      attachments,
       from: mail.fromAddress,
       to: mail.toEmail,
       replyTo: mail.replyTo,

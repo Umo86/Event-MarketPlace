@@ -11,6 +11,18 @@ const handlers: Handlers = {
     const { purgeExpired } = await import('../services/housekeeping');
     await purgeExpired();
   },
+  order_paid: async (p) => {
+    const { afterSupplierOrdersPaid } = await import('../services/invoices');
+    await afterSupplierOrdersPaid(String(p.orderId), (p.supplierOrderIds as string[]) ?? []);
+  },
+  refund_succeeded: async (p) => {
+    const { afterRefund } = await import('../services/refunds');
+    await afterRefund(String(p.refundId));
+  },
+  release_holds: async () => {
+    const { releaseExpiredHolds } = await import('../services/orders');
+    await releaseExpiredHolds();
+  },
   document_reminders: async () => {
     const { sendDocumentReminders } = await import('../services/documents');
     await sendDocumentReminders();
@@ -46,6 +58,8 @@ export async function sweep(now = new Date()) {
   await enqueue('purge_expired', {}, { dedupeKey: `purge:${day}`, once: true, maxAttempts: 2 });
   // From 8am UTC, so reminders arrive in working hours.
   if (now.getUTCHours() >= 8) await enqueue('document_reminders', {}, { dedupeKey: `document-reminders:${day}`, once: true, maxAttempts: 3 });
+  // Every sweep: unpaid orders left for a day give up their place.
+  await enqueue('release_holds', {}, { dedupeKey: 'release-holds', maxAttempts: 1 });
   const ran = await runJobsNow({ budgetMs: 50_000 });
   const pruned = await pruneJobs(now);
   return { ...ran, pruned };

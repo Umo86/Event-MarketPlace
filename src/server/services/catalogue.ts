@@ -139,6 +139,8 @@ export async function saveProduct(
   if (!category || category.supplierId !== target.supplierId) throw invalid('You don’t supply that category at this show. Choose one of yours.', { categoryId: 'Choose one of your categories.' });
   if (target.via === 'organiser' && category.supplierKind !== 'organiser') throw notFound();
   if (target.via === 'supplier' && category.supplierKind === 'organiser') throw notFound();
+  const [seller] = await db.select({ vatRegistered: suppliers.vatRegistered }).from(suppliers).where(eq(suppliers.id, target.supplierId)).limit(1);
+  if (seller && !seller.vatRegistered && input.vatRateBps !== 0) throw invalid('You’re not VAT registered, so you can’t charge VAT. Choose 0%.', { vatRateBps: 'Choose 0%: you’re not VAT registered.' });
   if (input.earlyPrice !== null && input.earlyPrice > input.price!) throw invalid('The early-bird price is usually lower than the standard price. Check it.', { earlyPrice: 'Higher than the standard price.' });
   const keys = await checkStandTypes(db, target.showId, input.standTypeKeys);
   const stored = image ? await storeImage(actor, { bytes: image.bytes, name: image.name, purpose: 'product', showId: target.showId, supplierId: target.supplierId, isPublic: true, allowed: ['png', 'jpeg'], maxBytes: 2 * 1024 * 1024 }) : null;

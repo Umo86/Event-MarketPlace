@@ -29,6 +29,47 @@ export interface PaymentsProvider {
   dashboardUrl(): string | null;
   /** Checks the signature over the exact bytes Stripe sent and refuses anything older than five minutes. */
   verifyWebhook(rawBody: string, signature: string | null, endpoint: 'platform' | 'connect'): Promise<StripeEventLite>;
+
+  // Checkout (all on Media10's own account): a customer and a SetupIntent to save the card once.
+  createCustomer(input: { email: string; name: string; orderId: string; idempotencyKey: string }): Promise<{ id: string }>;
+  createSetupIntent(input: { customerId: string; orderId: string; idempotencyKey: string }): Promise<{ id: string; clientSecret: string | null }>;
+  setupIntentStatus(id: string): Promise<{ status: 'succeeded' | 'processing' | 'requires_action' | 'failed'; paymentMethodId: string | null; customerId: string | null }>;
+  /**
+   * One supplier order's charge. With `account`, a direct charge on the supplier's account with
+   * Media10's commission as the application fee (the saved card is copied there first); without, a
+   * plain charge on Media10's own account. Never throws for a declined card: it says so.
+   */
+  charge(input: ChargeInput): Promise<ChargeResult>;
+  refund(input: { account: string | null; paymentIntentId: string; amountPence: number; refundApplicationFee: boolean; idempotencyKey: string; metadata: Record<string, string> }): Promise<{ id: string; status: 'succeeded' | 'pending' | 'failed'; feeRefundedPence: number | null }>;
+  /** Every refund Stripe has on a payment (to pick up refunds made in the supplier's own Stripe dashboard). */
+  listRefunds(account: string | null, paymentIntentId: string): Promise<{ id: string; amountPence: number; status: 'succeeded' | 'pending' | 'failed'; created: number }[]>;
+  /** For the browser's Payment Element; null with the simulator. */
+  publishableKey(): string | null;
+}
+
+export type ChargeInput = {
+  account: string | null;
+  customerId: string;
+  paymentMethodId: string;
+  amountPence: number;
+  feePence: number;
+  description: string;
+  statementSuffix: string;
+  metadata: Record<string, string>;
+  idempotencyKey: string;
+};
+
+export type ChargeResult =
+  | { status: 'succeeded'; paymentIntentId: string; chargeId: string | null }
+  | { status: 'processing'; paymentIntentId: string }
+  | { status: 'failed'; paymentIntentId: string | null; message: string; needsAuthentication: boolean };
+
+/** Plain words for a declined card (Stripe's own messages are already written for card holders). */
+function declineMessage(err: { code?: string; decline_code?: string; message?: string }): string {
+  if (err.code === 'authentication_required') return 'Your bank wants you to confirm this payment. Press Pay and follow your bank’s steps.';
+  if (err.code === 'card_declined' || err.decline_code) return err.message ?? 'Your card was declined. Try another card.';
+  if (err.code === 'expired_card') return 'Your card has expired. Try another card.';
+  return err.message ?? 'The payment didn’t go through. Try again or use another card.';
 }
 
 export class WebhookSignatureError extends Error {}
@@ -140,6 +181,88 @@ class StripeProvider implements PaymentsProvider {
     }
     return { id: event.id, type: event.type, created: event.created, account: event.account ?? null, object: event.data.object as unknown as Record<string, unknown> };
   }
+
+  publishableKey() {
+    return env().STRIPE_PUBLISHABLE_KEY ?? null;
+  }
+
+  async listRefunds(account: string | null, paymentIntentId: string) {
+    const s = await this.stripe();
+    const out: { id: string; amountPence: number; status: 'succeeded' | 'pending' | 'failed'; created: number }[] = [];
+    for await (const r of s.refunds.list({ payment_intent: paymentIntentId, limit: 100 }, account ? { stripeAccount: account } : {})) {
+      out.push({ id: r.id, amountPence: r.amount, status: r.status === 'succeeded' ? 'succeeded' : r.status === 'failed' || r.status === 'canceled' ? 'failed' : 'pending', created: r.created });
+    }
+    return out;
+  }
+
+  async createCustomer(input: { email: string; name: string; orderId: string; idempotencyKey: string }) {
+    const s = await this.stripe();
+    const c = await s.customers.create({ email: input.email, name: input.name.slice(0, 250) || undefined, metadata: { orderId: input.orderId } }, { idempotencyKey: input.idempotencyKey });
+    return { id: c.id };
+  }
+
+  async createSetupIntent(input: { customerId: string; orderId: string; idempotencyKey: string }) {
+    const s = await this.stripe();
+    const si = await s.setupIntents.create(
+      { customer: input.customerId, usage: 'off_session', allowed_payment_method_types: ['card'], metadata: { orderId: input.orderId } },
+      { idempotencyKey: input.idempotencyKey },
+    );
+    return { id: si.id, clientSecret: si.client_secret };
+  }
+
+  async setupIntentStatus(id: string) {
+    const s = await this.stripe();
+    const si = await s.setupIntents.retrieve(id);
+    const status = si.status === 'succeeded' ? 'succeeded' : si.status === 'processing' ? 'processing' : si.status === 'requires_action' ? 'requires_action' : 'failed';
+    const pm = typeof si.payment_method === 'string' ? si.payment_method : (si.payment_method?.id ?? null);
+    const customer = typeof si.customer === 'string' ? si.customer : (si.customer?.id ?? null);
+    return { status: status as 'succeeded' | 'processing' | 'requires_action' | 'failed', paymentMethodId: pm, customerId: customer };
+  }
+
+  async charge(input: ChargeInput): Promise<ChargeResult> {
+    const s = await this.stripe();
+    let paymentMethod = input.paymentMethodId;
+    const requestOptions = input.account ? { stripeAccount: input.account } : {};
+    try {
+      if (input.account) {
+        // Copy the card saved on Media10's account to the supplier's, for this charge.
+        const cloned = await s.paymentMethods.create({ customer: input.customerId, payment_method: input.paymentMethodId }, { stripeAccount: input.account, idempotencyKey: `${input.idempotencyKey}:pm` });
+        paymentMethod = cloned.id;
+      }
+      const pi = await s.paymentIntents.create(
+        {
+          amount: input.amountPence,
+          currency: 'gbp',
+          payment_method: paymentMethod,
+          allowed_payment_method_types: ['card'],
+          confirm: true,
+          off_session: true,
+          description: input.description.slice(0, 1000),
+          statement_descriptor_suffix: input.statementSuffix.replace(/[^A-Za-z0-9 .-]/g, '').slice(0, 22) || undefined,
+          metadata: input.metadata,
+          ...(input.account ? { application_fee_amount: input.feePence } : { customer: input.customerId }),
+        },
+        { ...requestOptions, idempotencyKey: input.idempotencyKey },
+      );
+      if (pi.status === 'succeeded') return { status: 'succeeded', paymentIntentId: pi.id, chargeId: typeof pi.latest_charge === 'string' ? pi.latest_charge : (pi.latest_charge?.id ?? null) };
+      if (pi.status === 'processing') return { status: 'processing', paymentIntentId: pi.id };
+      return { status: 'failed', paymentIntentId: pi.id, message: 'Your bank wants you to confirm this payment. Press Pay and follow your bank’s steps.', needsAuthentication: pi.status === 'requires_action' };
+    } catch (err) {
+      const e = err as { type?: string; code?: string; decline_code?: string; message?: string; raw?: { payment_intent?: { id?: string } } };
+      if (e?.type === 'StripeCardError') return { status: 'failed', paymentIntentId: e.raw?.payment_intent?.id ?? null, message: declineMessage(e), needsAuthentication: e.code === 'authentication_required' };
+      throw err;
+    }
+  }
+
+  async refund(input: { account: string | null; paymentIntentId: string; amountPence: number; refundApplicationFee: boolean; idempotencyKey: string; metadata: Record<string, string> }) {
+    const s = await this.stripe();
+    const r = await s.refunds.create(
+      { payment_intent: input.paymentIntentId, amount: input.amountPence, metadata: input.metadata, ...(input.account ? { refund_application_fee: input.refundApplicationFee } : {}) },
+      { ...(input.account ? { stripeAccount: input.account } : {}), idempotencyKey: input.idempotencyKey },
+    );
+    const status = r.status === 'succeeded' ? 'succeeded' : r.status === 'failed' || r.status === 'canceled' ? 'failed' : 'pending';
+    return { id: r.id, status: status as 'succeeded' | 'pending' | 'failed', feeRefundedPence: null };
+  }
 }
 
 /**
@@ -167,6 +290,37 @@ export class SimulatedPayments implements PaymentsProvider {
   }
   async verifyWebhook(): Promise<StripeEventLite> {
     throw new WebhookSignatureError('The simulator does not receive webhooks.');
+  }
+  publishableKey() {
+    return null;
+  }
+  async listRefunds() {
+    return [];
+  }
+  async createCustomer(input: { email: string; name: string; orderId: string; idempotencyKey: string }) {
+    this.calls.push({ method: 'createCustomer', args: input });
+    return { id: `cus_sim${input.orderId.replace(/-/g, '').slice(0, 14)}` };
+  }
+  async createSetupIntent(input: { customerId: string; orderId: string; idempotencyKey: string }) {
+    this.calls.push({ method: 'createSetupIntent', args: input });
+    return { id: `seti_sim${randomUUID().replace(/-/g, '').slice(0, 16)}`, clientSecret: null };
+  }
+  /** The test payment page records the outcome on the order itself, so there's nothing to ask here. */
+  async setupIntentStatus() {
+    return { status: 'succeeded' as const, paymentMethodId: null, customerId: null };
+  }
+  async charge(input: ChargeInput): Promise<ChargeResult> {
+    this.calls.push({ method: 'charge', args: input });
+    // The test payment page can choose a card that one supplier declines: "pm_sim_decline:<supplierId>".
+    if (input.paymentMethodId === `pm_sim_decline:${input.metadata.supplierId}`) {
+      return { status: 'failed', paymentIntentId: `pi_sim${randomUUID().replace(/-/g, '').slice(0, 16)}`, message: 'Your card was declined (test card). Try another card.', needsAuthentication: false };
+    }
+    const id = randomUUID().replace(/-/g, '').slice(0, 16);
+    return { status: 'succeeded', paymentIntentId: `pi_sim${id}`, chargeId: `ch_sim${id}` };
+  }
+  async refund(input: { account: string | null; paymentIntentId: string; amountPence: number; refundApplicationFee: boolean; idempotencyKey: string; metadata: Record<string, string> }) {
+    this.calls.push({ method: 'refund', args: input });
+    return { id: `re_sim${randomUUID().replace(/-/g, '').slice(0, 16)}`, status: 'succeeded' as const, feeRefundedPence: null };
   }
 }
 
